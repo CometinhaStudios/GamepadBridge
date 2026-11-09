@@ -37,7 +37,7 @@ fun XboxControllerVisual(
             cubicTo(w*.34f,h*.24f,w*.30f,h*.18f,w*.20f,h*.22f)
             close()
         }
-        drawPath(shell,Color(0xFF101522),Offset(0f,h*.018f))
+        drawPath(shell,Color(0xFF101522))
         drawPath(shell,Brush.verticalGradient(listOf(Color(0xFFF9FAFF),Color(0xFFD8DCE8),Color(0xFFADB4C4))))
         drawPath(shell,Color(0xFF737D91),style=Stroke(w*.008f))
 
