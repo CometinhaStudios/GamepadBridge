@@ -33,6 +33,17 @@ jobs:
           tar -xJf source/GamepadBridge-source.tar.xz -C /tmp/gamepadbridge-source
           cp -a /tmp/gamepadbridge-source/GamepadBridge/. .
 
+      - name: Export source snapshot for inspection
+        run: |
+          cd /tmp/gamepadbridge-source
+          zip -qr /tmp/GamepadBridge-source-inspect.zip GamepadBridge
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: GamepadBridge-source-inspect
+          path: /tmp/GamepadBridge-source-inspect.zip
+          retention-days: 1
+
       - name: Fix Shizuku process access and Kotlin read loop
         run: |
           cat > app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt <<'KOTLIN'
