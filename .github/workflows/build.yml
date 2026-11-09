@@ -41,7 +41,7 @@ jobs:
           # Apply only the tested bridge-service fix from v0.4; do not overlay its old activity.
           install -D patches/v0.4/app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
           # Add multi-profile support and the updated mapping flow.
-          cp -a patches/v0.6/. .
+          cp -a patches/v0.5/. .
           # v0.6 restores reactive Shizuku state handling and sets the release version.
           cp -a patches/v0.6/. .
           mkdir -p app/src/main/res/drawable-nodpi
