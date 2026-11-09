@@ -46,33 +46,9 @@ s=s.replace('''        val axisMap = HashMap<String, Pair<XboxInput, Boolean>>()
 s=s.replace('''                is RawSource.Axis -> axisMap[input.code] = output to input.positiveDirection''','''                is RawSource.Axis -> axisMap.getOrPut(input.code) { mutableListOf() }.add(output to input.positiveDirection)''')
 s=s.replace('''        val mappedAxes = axisMap.values.mapNotNull { ControllerProfile.outputAxis(it.first) }.distinct()''','''        val mappedAxes = axisMap.values.flatten().mapNotNull { ControllerProfile.outputAxis(it.first) }.distinct()''')
 s=s.replace('''        axisMap: Map<String, Pair<XboxInput, Boolean>>,''','''        axisMap: Map<String, List<Pair<XboxInput, Boolean>>>,''')
-old='''                val (xbox, positiveDirection) = axisMap[line.code] ?: return
-                val axis = ControllerProfile.outputAxis(xbox) ?: return
-                val raw = parseRawValue(line.value) ?: return
-                val range = axisRanges[line.code]
-                val isTrigger = xbox == XboxInput.L2 || xbox == XboxInput.R2
-                val normalized = when {
-                    range != null && isTrigger -> range.normalizeTrigger(raw)
-                    range != null -> range.normalize(raw)
-                    isTrigger -> ((raw.coerceIn(0, 255)) / 255f)
-                    raw in 0..255 -> (raw / 127.5f - 1f).coerceIn(-1f, 1f)
-                    else -> (raw / 32767f).coerceIn(-1f, 1f)
-                }
-                val directed = when {
-                    positiveDirection -> normalized
-                    isTrigger -> 1f - normalized
-                    else -> -normalized
-                }.let { if (isTrigger) it.coerceIn(0f, 1f) else it.coerceIn(-1f, 1f) }
-
-                val axes: IntArray
-                val values: FloatArray
-                synchronized(axisValues) {
-                    axisValues[axis] = directed
-                    axes = mappedAxes.toIntArray()
-                    values = FloatArray(axes.size) { index -> axisValues[axes[index]] ?: 0f }
-                }
-                ShizukuBridge.injectAxisBatch(axes, values, InputDevice.SOURCE_JOYSTICK)'''
-new='''                val mappings = axisMap[line.code] ?: return
+import re
+pattern = r'                val \(xbox, positiveDirection\) = axisMap\[line\.code\] \?: return\n.*?                ShizukuBridge\.injectAxisBatch\(axes, values, InputDevice\.SOURCE_JOYSTICK\)'
+new_block = '''                val mappings = axisMap[line.code] ?: return
                 val raw = parseRawValue(line.value) ?: return
                 val range = axisRanges[line.code]
                 for ((xbox, positiveDirection) in mappings) {
@@ -89,13 +65,15 @@ new='''                val mappings = axisMap[line.code] ?: return
                         XboxInput.LS_RIGHT, XboxInput.LS_DOWN,
                         XboxInput.RS_RIGHT, XboxInput.RS_DOWN
                     )
+                    val directional = xbox in setOf(
+                        XboxInput.LS_LEFT, XboxInput.LS_RIGHT, XboxInput.LS_UP, XboxInput.LS_DOWN,
+                        XboxInput.RS_LEFT, XboxInput.RS_RIGHT, XboxInput.RS_UP, XboxInput.RS_DOWN
+                    )
                     val directed = when {
                         isTrigger -> if (positiveDirection) normalized else 1f - normalized
-                        xbox in setOf(
-                            XboxInput.LS_LEFT, XboxInput.LS_RIGHT, XboxInput.LS_UP, XboxInput.LS_DOWN,
-                            XboxInput.RS_LEFT, XboxInput.RS_RIGHT, XboxInput.RS_UP, XboxInput.RS_DOWN
-                        ) -> if (positiveDirection == positiveTarget) normalized else -normalized
-                        else -> if (positiveDirection) normalized else -normalized
+                        directional -> if (positiveDirection == positiveTarget) normalized else -normalized
+                        positiveDirection -> normalized
+                        else -> -normalized
                     }.let { if (isTrigger) it.coerceIn(0f, 1f) else it.coerceIn(-1f, 1f) }
                     synchronized(axisValues) { axisValues[axis] = directed }
                 }
@@ -104,8 +82,8 @@ new='''                val mappings = axisMap[line.code] ?: return
                     FloatArray(axes.size) { index -> axisValues[axes[index]] ?: 0f }
                 }
                 ShizukuBridge.injectAxisBatch(axes, values, InputDevice.SOURCE_JOYSTICK)'''
-if old not in s: raise SystemExit("EV_ABS handling block not found")
-s=s.replace(old,new)
+s, n = re.subn(pattern, new_block, s, count=1, flags=re.S)
+if n != 1: raise SystemExit("could not patch EV_ABS handler")
 service.write_text(s)
 
 visual = Path("app/src/main/java/com/gamepadbridge/app/ui/XboxControllerVisual.kt")
