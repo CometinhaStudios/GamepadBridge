@@ -44,7 +44,9 @@ jobs:
         run: |
           cp -a patches/fix-v13/. .
       - name: Apply directional analog calibration and multi-direction axis bridge
-        run: python3 scripts/apply-v14.py
+        run: |
+          python3 scripts/apply-v14.py
+          cp -a patches/fix-v14/. .
       - name: Block external controller keys from Android navigation during mapping
         run: |
           python3 - <<'PY'
