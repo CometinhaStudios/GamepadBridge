@@ -40,54 +40,6 @@ if old not in s: raise SystemExit("output axis block not found")
 s=s.replace(old,new)
 profile.write_text(s)
 
-service = Path("app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt")
-s = service.read_text()
-s=s.replace('''        val axisMap = HashMap<String, Pair<XboxInput, Boolean>>()''','''        val axisMap = HashMap<String, MutableList<Pair<XboxInput, Boolean>>>()''')
-s=s.replace('''                is RawSource.Axis -> axisMap[input.code] = output to input.positiveDirection''','''                is RawSource.Axis -> axisMap.getOrPut(input.code) { mutableListOf() }.add(output to input.positiveDirection)''')
-s=s.replace('''        val mappedAxes = axisMap.values.mapNotNull { ControllerProfile.outputAxis(it.first) }.distinct()''','''        val mappedAxes = axisMap.values.flatten().mapNotNull { ControllerProfile.outputAxis(it.first) }.distinct()''')
-s=s.replace('''        axisMap: Map<String, Pair<XboxInput, Boolean>>,''','''        axisMap: Map<String, List<Pair<XboxInput, Boolean>>>,''')
-ev_start = s.index('"EV_ABS" -> {')
-start = s.index("val (xbox, positiveDirection)", ev_start)
-start = s.rfind("\\n", 0, start) + 1
-end_marker = "ShizukuBridge.injectAxisBatch("
-end = s.index(end_marker, start)
-end = s.index("\\n", end)
-new_block = """                val mappings = axisMap[line.code] ?: return
-                val raw = parseRawValue(line.value) ?: return
-                val range = axisRanges[line.code]
-                for ((xbox, positiveDirection) in mappings) {
-                    val axis = ControllerProfile.outputAxis(xbox) ?: continue
-                    val isTrigger = xbox == XboxInput.L2 || xbox == XboxInput.R2
-                    val normalized = when {
-                        range != null && isTrigger -> range.normalizeTrigger(raw)
-                        range != null -> range.normalize(raw)
-                        isTrigger -> (raw.coerceIn(0, 255) / 255f)
-                        raw in 0..255 -> (raw / 127.5f - 1f).coerceIn(-1f, 1f)
-                        else -> (raw / 32767f).coerceIn(-1f, 1f)
-                    }
-                    val positiveTarget = xbox in setOf(
-                        XboxInput.LS_RIGHT, XboxInput.LS_DOWN,
-                        XboxInput.RS_RIGHT, XboxInput.RS_DOWN
-                    )
-                    val directional = xbox in setOf(
-                        XboxInput.LS_LEFT, XboxInput.LS_RIGHT, XboxInput.LS_UP, XboxInput.LS_DOWN,
-                        XboxInput.RS_LEFT, XboxInput.RS_RIGHT, XboxInput.RS_UP, XboxInput.RS_DOWN
-                    )
-                    val directed = when {
-                        isTrigger -> if (positiveDirection) normalized else 1f - normalized
-                        directional -> if (positiveDirection == positiveTarget) normalized else -normalized
-                        positiveDirection -> normalized
-                        else -> -normalized
-                    }.let { if (isTrigger) it.coerceIn(0f, 1f) else it.coerceIn(-1f, 1f) }
-                    synchronized(axisValues) { axisValues[axis] = directed }
-                }
-                val axes = mappedAxes.toIntArray()
-                val values = synchronized(axisValues) {
-                    FloatArray(axes.size) { index -> axisValues[axes[index]] ?: 0f }
-                }
-                ShizukuBridge.injectAxisBatch(axes, values, InputDevice.SOURCE_JOYSTICK)"""
-service.write_text(s)
-
 visual = Path("app/src/main/java/com/gamepadbridge/app/ui/XboxControllerVisual.kt")
 s = visual.read_text()
 s=s.replace('''focus(setOf(XboxInput.LS_X, XboxInput.LS_Y, XboxInput.L3), 320f, 325f, 62f)''','''focus(setOf(XboxInput.LS_X, XboxInput.LS_Y, XboxInput.LS_LEFT, XboxInput.LS_RIGHT, XboxInput.LS_UP, XboxInput.LS_DOWN, XboxInput.L3), 320f, 325f, 62f)''')
