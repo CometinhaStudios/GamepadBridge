@@ -1,5 +1,6 @@
 package com.gamepadbridge.app.ui
 
+import android.view.KeyEvent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,8 +11,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.unit.dp
 import com.gamepadbridge.app.data.XboxInput
 
 /**
@@ -22,7 +21,7 @@ import com.gamepadbridge.app.data.XboxInput
 fun XboxControllerVisual(
     highlight: XboxInput?,
     modifier: Modifier = Modifier,
-    pressed: Set<XboxInput> = emptySet(),
+    pressed: Set<Int> = emptySet(),
     leftX: Float = 0f,
     leftY: Float = 0f,
     rightX: Float = 0f,
@@ -41,8 +40,30 @@ fun XboxControllerVisual(
         fun rect(x: Float, y: Float, w: Float, h: Float, color: Color, radius: Float = 14f) {
             drawRoundRect(color, p(x, y), Size(w * sx, h * sy), androidx.compose.ui.geometry.CornerRadius(radius * sx, radius * sy))
         }
+        fun isPressed(input: XboxInput): Boolean {
+            val code = when (input) {
+                XboxInput.A -> KeyEvent.KEYCODE_BUTTON_A
+                XboxInput.B -> KeyEvent.KEYCODE_BUTTON_B
+                XboxInput.X -> KeyEvent.KEYCODE_BUTTON_X
+                XboxInput.Y -> KeyEvent.KEYCODE_BUTTON_Y
+                XboxInput.L1 -> KeyEvent.KEYCODE_BUTTON_L1
+                XboxInput.R1 -> KeyEvent.KEYCODE_BUTTON_R1
+                XboxInput.L2 -> KeyEvent.KEYCODE_BUTTON_L2
+                XboxInput.R2 -> KeyEvent.KEYCODE_BUTTON_R2
+                XboxInput.L3 -> KeyEvent.KEYCODE_BUTTON_THUMBL
+                XboxInput.R3 -> KeyEvent.KEYCODE_BUTTON_THUMBR
+                XboxInput.BACK -> KeyEvent.KEYCODE_BUTTON_SELECT
+                XboxInput.START -> KeyEvent.KEYCODE_BUTTON_START
+                XboxInput.DPAD_UP -> KeyEvent.KEYCODE_DPAD_UP
+                XboxInput.DPAD_DOWN -> KeyEvent.KEYCODE_DPAD_DOWN
+                XboxInput.DPAD_LEFT -> KeyEvent.KEYCODE_DPAD_LEFT
+                XboxInput.DPAD_RIGHT -> KeyEvent.KEYCODE_DPAD_RIGHT
+                else -> -1
+            }
+            return code in pressed
+        }
         fun focus(inputs: Set<XboxInput>, x: Float, y: Float, r: Float) {
-            if (highlight in inputs || inputs.any { it in pressed }) {
+            if (highlight in inputs || inputs.any { isPressed(it) }) {
                 drawCircle(Color(0xFFFFB52E).copy(alpha = .25f), r * 1.45f * sx, p(x, y))
                 drawCircle(Color(0xFFFFB52E), r * sx, p(x, y), style = Stroke(8f * sx))
             }
