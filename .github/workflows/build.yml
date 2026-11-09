@@ -33,6 +33,10 @@ jobs:
           tar -xJf source/GamepadBridge-source.tar.xz -C /tmp/gamepadbridge-source
           cp -a /tmp/gamepadbridge-source/GamepadBridge/. .
 
+      - name: Fix MappingScreen collection rendering
+        run: |
+          sed -i 's/collected.entries.takeLast(5)/collected.entries.toList().takeLast(5)/' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
 
