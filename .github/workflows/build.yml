@@ -33,12 +33,17 @@ jobs:
           tar -xJf source/GamepadBridge-source.tar.xz -C /tmp/gamepadbridge-source
           cp -a /tmp/gamepadbridge-source/GamepadBridge/. .
 
-      - name: Apply GamepadBridge v0.5 source layer
+      - name: Rebuild from verified v0.3 base and apply targeted updates
         run: |
+          # v0.3 is the last known-good complete source baseline (including Shizuku).
           cp -a patches/v0.2/. .
           cp -a patches/v0.3/. .
-          cp -a patches/v0.4/. .
-          cp -a patches/v0.5/. .
+          # Apply only the tested bridge-service fix from v0.4; do not overlay its old activity.
+          install -D patches/v0.4/app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
+          # Add multi-profile support and the updated mapping flow.
+          cp -a patches/v0.6/. .
+          # v0.6 restores reactive Shizuku state handling and sets the release version.
+          cp -a patches/v0.6/. .
           mkdir -p app/src/main/res/drawable-nodpi
           curl -L --fail --retry 3 -A 'GamepadBridge build' 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Xbox-360-Wireless-Controller-White.png' -o app/src/main/res/drawable-nodpi/xbox360_white.png
 
@@ -46,13 +51,15 @@ jobs:
         run: |
           sed -i 's/collected.entries.takeLast(5)/collected.entries.toList().takeLast(5)/' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
 
-      - name: Verify v0.5 sources are the build inputs
+      - name: Verify v0.6 sources are the build inputs
         run: |
-          grep -q 'versionName = "v0.5"' app/build.gradle.kts
+          grep -q 'versionName = "v0.6"' app/build.gradle.kts
+          grep -q 'addBinderReceivedListenerSticky' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'Gerenciar perfis' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'Criar perfil e mapear' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'profiles_v2' app/src/main/java/com/gamepadbridge/app/data/ProfileStore.kt
           grep -q 'Anterior' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          grep -R -q 'ShizukuBridge' app/src/main/java/com/gamepadbridge/app/inject
 
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
@@ -71,13 +78,13 @@ jobs:
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
           test -n "$AAPT"
           "$AAPT" dump badging app/build/outputs/apk/debug/app-debug.apk | tee /tmp/apk-badging.txt
-          grep -q "package: name='com.gamepadbridge.app' versionCode='5' versionName='v0.5'" /tmp/apk-badging.txt
+          grep -q "package: name='com.gamepadbridge.app' versionCode='6' versionName='v0.6'" /tmp/apk-badging.txt
           sha256sum app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v0.5
+          name: GamepadBridge-v0.6
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
