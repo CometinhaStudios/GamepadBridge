@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.0
+    name: Build GamepadBridge v1.1
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -34,12 +34,18 @@ jobs:
           base64 --decode patches/beta1/patch.tar.gz.b64 > /tmp/gamepadbridge-beta1.tar.gz
           tar -xzf /tmp/gamepadbridge-beta1.tar.gz -C /tmp
           cp -a /tmp/beta1_patch/. .
+      - name: Apply Beta 2 controller visual and calibration safety fixes
+        run: |
+          base64 --decode patches/beta2/patch.tar.gz.b64 > /tmp/gamepadbridge-beta2.tar.gz
+          tar -xzf /tmp/gamepadbridge-beta2.tar.gz -C /tmp
+          cp -a /tmp/beta2_patch/. .
+          bash scripts/apply-beta2.sh
       - name: Set app version
         run: |
           sed -i 's/versionCode = 1/versionCode = 3/' app/build.gradle.kts
           sed -i 's/versionName = "0.1"/versionName = "v1.0"/' app/build.gradle.kts
           grep -q 'versionCode = 3' app/build.gradle.kts
-          grep -q 'versionName = "v1.0"' app/build.gradle.kts
+          grep -q 'versionName = "v1.1"' app/build.gradle.kts
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
@@ -49,23 +55,25 @@ jobs:
         run: gradle wrapper --gradle-version 8.7
       - name: Build APK
         run: ./gradlew assembleDebug --stacktrace
-      - name: Verify v1.0 APK and required fixes
+      - name: Verify v1.1 APK and required fixes
         run: |
           grep -q 'LaunchedEffect(index, candidate)' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'Anterior' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'Aperte Voltar novamente' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'ControllerTestScreen' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+          grep -q 'mappingActive && controllerSource' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+          grep -q '1536f / 1084f' app/src/main/java/com/gamepadbridge/app/ui/XboxControllerVisual.kt
           grep -q 'addBinderReceivedListenerSticky' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'contains("HAT"' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
           test -n "$AAPT"
           "$AAPT" dump badging app/build/outputs/apk/debug/app-debug.apk | tee /tmp/apk-badging.txt
-          grep -q "package: name='com.gamepadbridge.app' versionCode='3' versionName='v1.0'" /tmp/apk-badging.txt
+          grep -q "package: name='com.gamepadbridge.app' versionCode='4' versionName='v1.1'" /tmp/apk-badging.txt
           sha256sum app/build/outputs/apk/debug/app-debug.apk
-      - name: Upload v1.0 APK
+      - name: Upload v1.1 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.0
+          name: GamepadBridge-v1.1
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
