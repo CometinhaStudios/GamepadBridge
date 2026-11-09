@@ -47,6 +47,16 @@ jobs:
           mkdir -p app/src/main/res/drawable-nodpi
           curl -L --fail --retry 3 -A 'GamepadBridge build' 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Xbox-360-Wireless-Controller-White.png' -o app/src/main/res/drawable-nodpi/xbox360_white.png
 
+      - name: Export Beta 2 source for verification
+        run: |
+          tar -czf /tmp/GamepadBridge-beta2-source.zip -C /tmp/gamepadbridge-source GamepadBridge
+      - name: Upload Beta 2 source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: GamepadBridge-beta2-source-inspection
+          path: /tmp/GamepadBridge-beta2-source.zip
+          retention-days: 1
+
       - name: Fix MappingScreen collection rendering
         run: |
           sed -i 's/collected.entries.takeLast(5)/collected.entries.toList().takeLast(5)/' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
