@@ -33,6 +33,78 @@ jobs:
           tar -xJf source/GamepadBridge-source.tar.xz -C /tmp/gamepadbridge-source
           cp -a /tmp/gamepadbridge-source/GamepadBridge/. .
 
+      - name: Fix Shizuku process access and Kotlin read loop
+        run: |
+          cat > app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt <<'KOTLIN'
+          package com.gamepadbridge.app.input
+
+          import rikka.shizuku.Shizuku
+          import java.io.BufferedReader
+          import java.io.InputStreamReader
+
+          object DeviceNodeReader {
+              data class RawLine(val type: String, val code: String, val value: String)
+              data class DeviceEntry(val node: String, val name: String)
+
+              fun listDevices(): List<DeviceEntry> {
+                  val output = runShell("getevent -il") ?: return emptyList()
+                  val result = mutableListOf<DeviceEntry>()
+                  var currentNode: String? = null
+                  for (line in output.lines()) {
+                      val nodeMatch = Regex("""add device \\d+: (/dev/input/event\\d+)""").find(line)
+                      if (nodeMatch != null) currentNode = nodeMatch.groupValues[1]
+                      val nameMatch = Regex("""name:\\s*"(.*)"""").find(line)
+                      if (nameMatch != null && currentNode != null) {
+                          result.add(DeviceEntry(currentNode, nameMatch.groupValues[1]))
+                      }
+                  }
+                  return result
+              }
+
+              fun streamEvents(node: String, onLine: (RawLine) -> Unit, shouldStop: () -> Boolean) {
+                  val process = runShizukuCommand(arrayOf("getevent", "-l", node)) ?: return
+                  val reader = BufferedReader(InputStreamReader(process.inputStream))
+                  try {
+                      while (!shouldStop()) {
+                          val line = reader.readLine() ?: break
+                          val parsed = parseLine(line) ?: continue
+                          onLine(parsed)
+                      }
+                  } finally {
+                      runCatching { process.destroy() }
+                  }
+              }
+
+              private fun parseLine(line: String): RawLine? {
+                  val parts = line.trim().split(Regex("\\s+"))
+                  if (parts.size < 3) return null
+                  val type = parts[parts.size - 3]
+                  val code = parts[parts.size - 2]
+                  val value = parts[parts.size - 1]
+                  if (!type.startsWith("EV_")) return null
+                  return RawLine(type, code, value)
+              }
+
+              private fun runShell(cmd: String): String? {
+                  return runCatching {
+                      val process = runShizukuCommand(cmd.split(" ").toTypedArray()) ?: return null
+                      process.inputStream.bufferedReader().use { it.readText() }
+                  }.getOrNull()
+              }
+
+              // Shizuku exposes newProcess as non-public in some API versions.
+              private fun runShizukuCommand(command: Array<String>): Process? {
+                  return runCatching {
+                      val method = Shizuku::class.java.declaredMethods.firstOrNull {
+                          it.name == "newProcess" && it.parameterTypes.size == 3
+                      } ?: return null
+                      method.isAccessible = true
+                      method.invoke(null, command, null, null) as? Process
+                  }.getOrNull()
+              }
+          }
+          KOTLIN
+
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
 
