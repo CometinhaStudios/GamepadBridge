@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.3
+    name: Build GamepadBridge v1.4
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -43,6 +43,8 @@ jobs:
       - name: Apply angled controller visual and live test feedback
         run: |
           cp -a patches/fix-v13/. .
+      - name: Apply directional analog calibration and multi-direction axis bridge
+        run: python3 scripts/apply-v14.py
       - name: Block external controller keys from Android navigation during mapping
         run: |
           python3 - <<'PY'
@@ -71,10 +73,10 @@ jobs:
           PY
       - name: Set app version
         run: |
-          sed -i 's/versionCode = 1/versionCode = 6/' app/build.gradle.kts
-          sed -i 's/versionName = "0.1"/versionName = "v1.3"/' app/build.gradle.kts
-          grep -q 'versionCode = 6' app/build.gradle.kts
-          grep -q 'versionName = "v1.3"' app/build.gradle.kts
+          sed -i 's/versionCode = 1/versionCode = 7/' app/build.gradle.kts
+          sed -i 's/versionName = "0.1"/versionName = "v1.4"/' app/build.gradle.kts
+          grep -q 'versionCode = 7' app/build.gradle.kts
+          grep -q 'versionName = "v1.4"' app/build.gradle.kts
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
@@ -93,10 +95,10 @@ jobs:
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
           sha256sum "$APK"
-      - name: Upload v1.3 APK
+      - name: Upload v1.4 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.3
+          name: GamepadBridge-v1.4
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
