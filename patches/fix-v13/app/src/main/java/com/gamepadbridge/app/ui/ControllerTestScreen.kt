@@ -1,6 +1,8 @@
 package com.gamepadbridge.app.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -10,35 +12,44 @@ import com.gamepadbridge.app.input.ControllerTestState
 
 @Composable
 fun ControllerTestScreen(onBack: () -> Unit) {
+    val pressed = ControllerTestState.pressed.toMap()
+    val axes = ControllerTestState.axes.value
+    val active = pressed.filterValues { it }.keys
+
     DisposableEffect(Unit) {
         ControllerTestState.enabled = true
+        ControllerTestState.clear()
         onDispose {
             ControllerTestState.enabled = false
-            ControllerTestState.pressed.clear()
+            ControllerTestState.clear()
         }
     }
-    val pressed = ControllerTestState.pressed.keys.toSet()
-    val lx = ControllerTestState.leftX
-    val ly = ControllerTestState.leftY
-    val rx = ControllerTestState.rightX
-    val ry = ControllerTestState.rightY
-    val lt = ControllerTestState.lt
-    val rt = ControllerTestState.rt
+
+    val lx = axes.getOrElse(0) { 0f }.coerceIn(-1f, 1f)
+    val ly = axes.getOrElse(1) { 0f }.coerceIn(-1f, 1f)
+    val rx = axes.getOrElse(2) { 0f }.coerceIn(-1f, 1f)
+    val ry = axes.getOrElse(3) { 0f }.coerceIn(-1f, 1f)
+    val lt = axes.getOrElse(4) { 0f }.coerceIn(0f, 1f)
+    val rt = axes.getOrElse(5) { 0f }.coerceIn(0f, 1f)
 
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Teste de controle", style = MaterialTheme.typography.headlineSmall)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("Voltar") }
+            Text("Teste do controle", style = MaterialTheme.typography.titleLarge)
+        }
         Text(
-            "Aperte os botões, mova os analógicos e pressione os gatilhos.",
+            "Pressione os botões, mova os analógicos e aperte os gatilhos.",
             style = MaterialTheme.typography.bodySmall
         )
         Spacer(Modifier.height(12.dp))
+
         XboxControllerVisual(
-            highlight = null,
+            highlight = ControllerTestState.highlight(),
             modifier = Modifier.fillMaxWidth(),
-            pressed = pressed,
+            pressed = active,
             leftX = lx,
             leftY = ly,
             rightX = rx,
@@ -46,12 +57,43 @@ fun ControllerTestScreen(onBack: () -> Unit) {
             leftTrigger = lt,
             rightTrigger = rt
         )
-        Spacer(Modifier.height(8.dp))
-        Text("Botões: ${if (pressed.isEmpty()) "nenhum" else pressed.joinToString { it.label }}")
-        Text("Analógico esquerdo: X ${"%.2f".format(lx)} • Y ${"%.2f".format(ly)}")
-        Text("Analógico direito: X ${"%.2f".format(rx)} • Y ${"%.2f".format(ry)}")
-        Text("Gatilhos: LT ${"%.0f".format(lt * 100)}% • RT ${"%.0f".format(rt * 100)}%")
+
         Spacer(Modifier.height(12.dp))
-        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Voltar") }
+        Text("Botões detectados", style = MaterialTheme.typography.titleMedium)
+        Text(
+            if (active.isEmpty()) "Nenhum botão pressionado"
+            else active.joinToString(" • ") { android.view.KeyEvent.keyCodeToString(it) }
+        )
+        Spacer(Modifier.height(12.dp))
+        Text("Movimento dos analógicos", style = MaterialTheme.typography.titleMedium)
+
+        val axisRows = listOf(
+            "Analógico esquerdo X" to lx,
+            "Analógico esquerdo Y" to ly,
+            "Analógico direito X" to rx,
+            "Analógico direito Y" to ry
+        )
+        axisRows.forEach { (label, value) ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                Text("${(value * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+            }
+            LinearProgressIndicator(
+                progress = (value + 1f) / 2f,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Text("Gatilhos", style = MaterialTheme.typography.titleMedium)
+        listOf("LT" to lt, "RT" to rt).forEach { (label, value) ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                Text("${(value * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+            }
+            LinearProgressIndicator(progress = value, modifier = Modifier.fillMaxWidth())
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Voltar") }
     }
 }
