@@ -46,7 +46,7 @@ s=s.replace('''        val axisMap = HashMap<String, Pair<XboxInput, Boolean>>()
 s=s.replace('''                is RawSource.Axis -> axisMap[input.code] = output to input.positiveDirection''','''                is RawSource.Axis -> axisMap.getOrPut(input.code) { mutableListOf() }.add(output to input.positiveDirection)''')
 s=s.replace('''        val mappedAxes = axisMap.values.mapNotNull { ControllerProfile.outputAxis(it.first) }.distinct()''','''        val mappedAxes = axisMap.values.flatten().mapNotNull { ControllerProfile.outputAxis(it.first) }.distinct()''')
 s=s.replace('''        axisMap: Map<String, Pair<XboxInput, Boolean>>,''','''        axisMap: Map<String, List<Pair<XboxInput, Boolean>>>,''')
-start = s.index("                val (xbox, positiveDirection) = axisMap[line.code] ?: return")
+start = s.index("val (xbox, positiveDirection) = axisMap[line.code] ?: return")
 end_marker = "                ShizukuBridge.injectAxisBatch(axes, values, InputDevice.SOURCE_JOYSTICK)"
 end = s.index(end_marker, start) + len(end_marker)
 new_block = """                val mappings = axisMap[line.code] ?: return
