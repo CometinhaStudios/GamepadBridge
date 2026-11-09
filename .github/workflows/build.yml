@@ -42,11 +42,7 @@ jobs:
           bash scripts/apply-beta2.sh
       - name: Apply angled controller visual and live test feedback
         run: |
-          cp patches/fix-v13/app/src/main/java/com/gamepadbridge/app/ui/XboxControllerVisual.kt app/src/main/java/com/gamepadbridge/app/ui/XboxControllerVisual.kt
-          echo "=== ControllerTestState contract ==="
-          sed -n '1,180p' app/src/main/java/com/gamepadbridge/app/input/ControllerTestState.kt
-          echo "=== Existing ControllerTestScreen contract ==="
-          sed -n '1,180p' app/src/main/java/com/gamepadbridge/app/ui/ControllerTestScreen.kt
+          cp -a patches/fix-v13/. .
       - name: Block external controller keys from Android navigation during mapping
         run: |
           python3 - <<'PY'
