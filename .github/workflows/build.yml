@@ -47,7 +47,7 @@ jobs:
           import re
           p = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
           s = p.read_text()
-          pattern = r"        // During calibration, some generic pads expose.*?\\n        if \\(mappingActive && event\\.keyCode == KeyEvent\\.KEYCODE_BUTTON_B\\) return true\\n"
+          pattern = r"        // During calibration, some generic pads expose[\\s\\S]*?        if \\(mappingActive && event\\.keyCode == KeyEvent\\.KEYCODE_BUTTON_B\\) return true\\n"
           replacement = """        // CalibrationCapture reads raw /dev/input events independently.
           // Consume every controller key here so A/X/L3/R3 aliases cannot become
           // Android BACK/MODE and accidentally leave the mapping screen.
