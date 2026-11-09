@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.1
+    name: Build GamepadBridge v1.2
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -40,12 +40,30 @@ jobs:
           tar -xzf /tmp/gamepadbridge-beta2.tar.gz -C /tmp
           cp -a /tmp/beta2_patch/. .
           bash scripts/apply-beta2.sh
+      - name: Prevent controller buttons from triggering system navigation during mapping
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
+          s = p.read_text()
+          pattern = r"        // During calibration, some generic pads expose.*?\\n        if \\(mappingActive && event\\.keyCode == KeyEvent\\.KEYCODE_BUTTON_B\\) return true\\n"
+          replacement = """        // CalibrationCapture reads raw /dev/input events independently.
+          // Consume every controller key here so A/X/L3/R3 aliases cannot become
+          // Android BACK/MODE and accidentally leave the mapping screen.
+          if (mappingActive && controllerSource) return true
+  """
+          updated, count = re.subn(pattern, replacement, s, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit("Could not locate the old controller-navigation guard; refusing an unsafe build.")
+          p.write_text(updated)
+          PY
       - name: Set app version
         run: |
-          sed -i 's/versionCode = 1/versionCode = 4/' app/build.gradle.kts
-          sed -i 's/versionName = "0.1"/versionName = "v1.1"/' app/build.gradle.kts
-          grep -q 'versionCode = 4' app/build.gradle.kts
-          grep -q 'versionName = "v1.1"' app/build.gradle.kts
+          sed -i 's/versionCode = 1/versionCode = 5/' app/build.gradle.kts
+          sed -i 's/versionName = "0.1"/versionName = "v1.2"/' app/build.gradle.kts
+          grep -q 'versionCode = 5' app/build.gradle.kts
+          grep -q 'versionName = "v1.2"' app/build.gradle.kts
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
@@ -55,25 +73,25 @@ jobs:
         run: gradle wrapper --gradle-version 8.7
       - name: Build APK
         run: ./gradlew assembleDebug --stacktrace
-      - name: Verify v1.1 APK and required fixes
+      - name: Verify v1.2 APK and required fixes
         run: |
           grep -q 'LaunchedEffect(index, candidate)' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'Anterior' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'Aperte Voltar novamente' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'ControllerTestScreen' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
-          grep -q 'mappingActive && controllerSource' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+          grep -q 'if (mappingActive && controllerSource) return true' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q '1536f / 1084f' app/src/main/java/com/gamepadbridge/app/ui/XboxControllerVisual.kt
           grep -q 'addBinderReceivedListenerSticky' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'contains("HAT"' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
           test -n "$AAPT"
           "$AAPT" dump badging app/build/outputs/apk/debug/app-debug.apk | tee /tmp/apk-badging.txt
-          grep -q "package: name='com.gamepadbridge.app' versionCode='4' versionName='v1.1'" /tmp/apk-badging.txt
+          grep -q "package: name='com.gamepadbridge.app' versionCode='5' versionName='v1.2'" /tmp/apk-badging.txt
           sha256sum app/build/outputs/apk/debug/app-debug.apk
-      - name: Upload v1.1 APK
+      - name: Upload v1.2 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.1
+          name: GamepadBridge-v1.2
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
