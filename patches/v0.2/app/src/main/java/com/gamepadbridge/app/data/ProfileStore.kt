@@ -15,6 +15,8 @@ class ProfileStore(private val context: Context) {
         prefs[PROFILE_KEY]?.let { ControllerProfile.deserialize(it) }
     }
 
+    val activeControllerProfile: Flow<ControllerProfile?> = profileFlow
+
     suspend fun save(profile: ControllerProfile) {
         context.dataStore.edit { it[PROFILE_KEY] = profile.serialize() }
     }
