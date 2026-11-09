@@ -29,7 +29,7 @@ class ProfileStore(private val context: Context) {
     suspend fun save(profile: ControllerProfile, name: String) {
         val cleanName = name.trim().ifBlank { profile.deviceName }
         context.dataStore.edit { prefs ->
-            val all = decodeProfiles(prefs[PROFILES_KEY].orEmpty()).toMutableMap()
+            val all = readProfiles(prefs).toMutableMap()
             all[cleanName] = profile
             prefs[PROFILES_KEY] = encodeProfiles(all)
             prefs[ACTIVE_KEY] = cleanName
@@ -56,7 +56,7 @@ class ProfileStore(private val context: Context) {
             val all = decodeProfiles(prefs[PROFILES_KEY].orEmpty()).toMutableMap()
             all.remove(name)
             prefs[PROFILES_KEY] = encodeProfiles(all)
-            if (prefs[ACTIVE_KEY] == name) prefs[ACTIVE_KEY] = all.keys.firstOrNull()
+            if (prefs[ACTIVE_KEY] == name) { val next = all.keys.firstOrNull(); if (next == null) prefs.remove(ACTIVE_KEY) else prefs[ACTIVE_KEY] = next }
         }
     }
     private fun readProfiles(prefs: Preferences): Map<String, ControllerProfile> {
