@@ -47,12 +47,13 @@ jobs:
           import re
           p = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
           s = p.read_text()
-          start = s.find("        // During calibration, some generic pads expose")
-          marker = "        if (mappingActive && event.keyCode == KeyEvent.KEYCODE_BUTTON_B) return true"
-          end = s.find(marker, start) if start >= 0 else -1
+          start_marker = "        if (mappingActive && controllerSource && event.keyCode in setOf("
+          end_marker = "        if (mappingActive && event.keyCode == KeyEvent.KEYCODE_BUTTON_B) return true"
+          start = s.find(start_marker)
+          end = s.find(end_marker, start) if start >= 0 else -1
           if start < 0 or end < 0:
               raise SystemExit("Could not locate the old controller-navigation guard; refusing an unsafe build.")
-          end += len(marker)
+          end += len(end_marker)
           if s[end:end + 1] == chr(10):
               end += 1
           guard = """        // CalibrationCapture reads raw /dev/input events independently.
@@ -60,7 +61,7 @@ jobs:
           // Android BACK/MODE and accidentally leave the mapping screen.
           if (mappingActive && controllerSource) return true
           """
-          p.write_text(s[:start] + guard + s[end:])
+
 
           PY
       - name: Set app version
