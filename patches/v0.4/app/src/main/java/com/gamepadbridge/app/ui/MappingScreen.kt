@@ -74,6 +74,7 @@ private fun CalibrationStep(node: String, profileStore: ProfileStore, onDone: ()
     val collected = remember { mutableStateMapOf<XboxInput, RawSource>() }
     var candidate by remember { mutableStateOf<RawSource?>(null) }
     var warning by remember { mutableStateOf<String?>(null) }
+    var retryToken by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
     DisposableEffect(node) {
@@ -82,13 +83,15 @@ private fun CalibrationStep(node: String, profileStore: ProfileStore, onDone: ()
     }
 
     // A leitura para assim que encontra uma entrada. Nada é salvo até o usuário confirmar.
-    LaunchedEffect(index, candidate) {
-        if (index >= order.size || candidate != null) return@LaunchedEffect
+    LaunchedEffect(index, retryToken) {
+        if (index >= order.size) return@LaunchedEffect
+        var capturedThisStep = false
         CalibrationCapture.events.collect { source ->
-            if (candidate == null) {
+            if (!capturedThisStep) {
                 if (collected.values.any { it == source }) {
                     warning = "Essa entrada já foi usada. Aperte outro botão ou mova outra direção."
                 } else {
+                    capturedThisStep = true
                     candidate = source
                     warning = null
                 }
@@ -150,7 +153,7 @@ private fun CalibrationStep(node: String, profileStore: ProfileStore, onDone: ()
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("Confirmar tecla pressionada") }
-                OutlinedButton(onClick = { candidate = null; warning = "Não foi essa tecla. Tente novamente." }, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { candidate = null; warning = "Não foi essa tecla. Tente novamente."; retryToken++ }, modifier = Modifier.fillMaxWidth()) {
                     Text("Não foi essa — tentar novamente")
                 }
             }
@@ -162,17 +165,19 @@ private fun CalibrationStep(node: String, profileStore: ProfileStore, onDone: ()
                 OutlinedButton(
                     onClick = {
                         if (index > 0) {
-                            index--
-                            collected.remove(order[index])
+                            val previousIndex = index - 1
+                            collected.remove(order[previousIndex])
+                            index = previousIndex
                             candidate = null
                             warning = null
+                            retryToken++
                         }
                     },
                     enabled = index > 0,
                     modifier = Modifier.weight(1f)
                 ) { Text("Anterior") }
                 OutlinedButton(
-                    onClick = { candidate = null; warning = null; index++ },
+                    onClick = { candidate = null; warning = null; index++; retryToken++ },
                     modifier = Modifier.weight(1f)
                 ) { Text("Pular") }
             }
@@ -190,7 +195,7 @@ private fun CalibrationStep(node: String, profileStore: ProfileStore, onDone: ()
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Salvar perfil e voltar ao menu") }
             OutlinedButton(
-                onClick = { index = order.lastIndex; candidate = null },
+                onClick = { index = order.lastIndex; candidate = null; retryToken++ },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Voltar e revisar") }
         }
