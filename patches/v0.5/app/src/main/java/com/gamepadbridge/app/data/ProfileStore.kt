@@ -2,19 +2,21 @@ package com.gamepadbridge.app.data
 
 import android.content.Context
 import android.util.Base64
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore by preferencesDataStore(name = "gamepad_bridge_profiles")
+private val Context.dataStore by preferencesDataStore(name = "gamepad_bridge_profile")
 private val PROFILES_KEY = stringPreferencesKey("profiles_v2")
 private val ACTIVE_KEY = stringPreferencesKey("active_profile")
+private val LEGACY_PROFILE_KEY = stringPreferencesKey("profile")
 
 class ProfileStore(private val context: Context) {
     val profilesFlow: Flow<Map<String, ControllerProfile>> = context.dataStore.data.map { prefs ->
-        decodeProfiles(prefs[PROFILES_KEY].orEmpty())
+        readProfiles(prefs)
     }
     val activeProfileNameFlow: Flow<String?> = context.dataStore.data.map { prefs -> prefs[ACTIVE_KEY] }
     val profileFlow: Flow<ControllerProfile?> = context.dataStore.data.map { prefs ->
@@ -57,6 +59,13 @@ class ProfileStore(private val context: Context) {
             if (prefs[ACTIVE_KEY] == name) prefs[ACTIVE_KEY] = all.keys.firstOrNull()
         }
     }
+    private fun readProfiles(prefs: Preferences): Map<String, ControllerProfile> {
+        val stored = prefs[PROFILES_KEY]
+        if (stored != null) return decodeProfiles(stored)
+        val legacy = prefs[LEGACY_PROFILE_KEY]?.let { ControllerProfile.deserialize(it) }
+        return if (legacy == null) emptyMap() else mapOf(legacy.deviceName to legacy)
+    }
+
     private fun encodeProfiles(profiles: Map<String, ControllerProfile>): String =
         profiles.entries.joinToString("\n") { (name, profile) ->
             "\u0024{enc(name)}:\u0024{enc(profile.serialize())}"
