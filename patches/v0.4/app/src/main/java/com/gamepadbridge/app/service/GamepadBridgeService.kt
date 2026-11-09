@@ -114,9 +114,9 @@ class GamepadBridgeService : Service() {
 
     private fun normalizeStick(raw: Int): Float =
         when {
-            raw in -32768..32767 -> (raw / 32767f).coerceIn(-1f, 1f)
             raw in 0..255 -> ((raw - 127.5f) / 127.5f).coerceIn(-1f, 1f)
             raw in 0..65535 -> ((raw - 32767.5f) / 32767.5f).coerceIn(-1f, 1f)
+            raw in -32768..32767 -> (raw / 32767f).coerceIn(-1f, 1f)
             else -> raw.toFloat().coerceIn(-1f, 1f)
         }
 
