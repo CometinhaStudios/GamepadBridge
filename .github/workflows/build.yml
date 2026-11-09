@@ -13,7 +13,7 @@ jobs:
     name: Build Beta 1 APK
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout source
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -21,12 +21,17 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
 
       - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+
+      - name: Extract Android project
+        run: |
+          mkdir -p /tmp/gamepadbridge-source
+          tar -xJf source/GamepadBridge-source.tar.xz -C /tmp/gamepadbridge-source
+          cp -a /tmp/gamepadbridge-source/GamepadBridge/. .
 
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
