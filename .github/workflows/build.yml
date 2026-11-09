@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.2
+    name: Build GamepadBridge v1.3
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -40,36 +40,41 @@ jobs:
           tar -xzf /tmp/gamepadbridge-beta2.tar.gz -C /tmp
           cp -a /tmp/beta2_patch/. .
           bash scripts/apply-beta2.sh
-      - name: Prevent controller buttons from triggering system navigation during mapping
+      - name: Apply angled controller visual and live test feedback
+        run: |
+          cp -a patches/fix-v13/. .
+      - name: Block external controller keys from Android navigation during mapping
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
           p = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
           s = p.read_text()
-          start_marker = "        if (mappingActive && controllerSource && event.keyCode in setOf("
-          end_marker = "        if (mappingActive && event.keyCode == KeyEvent.KEYCODE_BUTTON_B) return true"
-          start = s.find(start_marker)
-          end = s.find(end_marker, start) if start >= 0 else -1
-          if start < 0 or end < 0:
-              raise SystemExit("Could not locate the old controller-navigation guard; refusing an unsafe build.")
-          end += len(end_marker)
-          if s[end:end + 1] == chr(10):
-              end += 1
-          guard = """        // CalibrationCapture reads raw /dev/input events independently.
-          // Consume every controller key so A/X/L3/R3 aliases cannot become
-          // Android BACK/MODE and accidentally leave the mapping screen.
-          if (mappingActive && controllerSource) return true
+          marker = "        // GamepadBridge: external controller keys are captured from /dev/input during mapping."
+          if marker not in s:
+              needle = "    override fun dispatchKeyEvent(event: KeyEvent): Boolean {"
+              if needle not in s:
+                  raise SystemExit("dispatchKeyEvent not found; refusing to build without the mapping safety guard.")
+              guard = """    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                  // GamepadBridge: external controller keys are captured from /dev/input during mapping.
+                  // Some pads report ordinary buttons as BACK/MODE or with a keyboard source.
+                  val controllerSources = InputDevice.SOURCE_GAMEPAD or InputDevice.SOURCE_JOYSTICK or InputDevice.SOURCE_DPAD
+                  val eventDevice = InputDevice.getDevice(event.deviceId)
+                  val isExternalController = event.deviceId > 0 && (
+                      (event.source and controllerSources) != 0 ||
+                      ((eventDevice?.sources ?: 0) and controllerSources) != 0 ||
+                      event.keyCode == KeyEvent.KEYCODE_BACK
+                  )
+                  if (mappingActive && isExternalController) return true
           """
-
-
+              s = s.replace(needle, guard, 1)
+              p.write_text(s)
           PY
       - name: Set app version
         run: |
-          sed -i 's/versionCode = 1/versionCode = 5/' app/build.gradle.kts
-          sed -i 's/versionName = "0.1"/versionName = "v1.2"/' app/build.gradle.kts
-          grep -q 'versionCode = 5' app/build.gradle.kts
-          grep -q 'versionName = "v1.2"' app/build.gradle.kts
+          sed -i 's/versionCode = 1/versionCode = 6/' app/build.gradle.kts
+          sed -i 's/versionName = "0.1"/versionName = "v1.3"/' app/build.gradle.kts
+          grep -q 'versionCode = 6' app/build.gradle.kts
+          grep -q 'versionName = "v1.3"' app/build.gradle.kts
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
@@ -88,10 +93,10 @@ jobs:
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
           sha256sum "$APK"
-      - name: Upload v1.2 APK
+      - name: Upload v1.3 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.2
+          name: GamepadBridge-v1.3
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
