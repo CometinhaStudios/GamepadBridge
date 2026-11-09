@@ -53,7 +53,7 @@ jobs:
           if start < 0 or end < 0:
               raise SystemExit("Could not locate the old controller-navigation guard; refusing an unsafe build.")
           end += len(marker)
-          if s[end:end + 1] == "\\n":
+          if s[end:end + 1] == chr(10):
               end += 1
           guard = """        // CalibrationCapture reads raw /dev/input events independently.
           // Consume every controller key so A/X/L3/R3 aliases cannot become
