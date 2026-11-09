@@ -34,16 +34,22 @@ fun XboxControllerVisual(
             val w = size.width
             val h = size.height
             val active = Color(0xFFFF8A00)
-            fun ring(input: XboxInput, x: Float, y: Float, radius: Float) {
-                if (input == highlight || input in pressed) drawCircle(active, radius, Offset(w*x, h*y), style = Stroke(8f))
+            fun ring(inputs: Set<XboxInput>, x: Float, y: Float, radius: Float) {
+                if (highlight in inputs || inputs.any { it in pressed }) {
+                    drawCircle(active, radius, Offset(w*x, h*y), style = Stroke(8f))
+                }
             }
-            ring(XboxInput.LS_X, .35f, .23f, w*.055f)
-            ring(XboxInput.RS_X, .66f, .60f, w*.055f)
-            ring(XboxInput.DPAD_UP, .40f, .47f, w*.075f)
-            ring(XboxInput.Y, .89f, .38f, w*.035f)
-            ring(XboxInput.B, .94f, .52f, w*.035f)
-            ring(XboxInput.A, .83f, .61f, w*.035f)
-            ring(XboxInput.X, .78f, .48f, w*.035f)
+            ring(setOf(XboxInput.LS_X, XboxInput.LS_Y, XboxInput.L3), .35f, .23f, w*.055f)
+            ring(setOf(XboxInput.RS_X, XboxInput.RS_Y, XboxInput.R3), .66f, .60f, w*.055f)
+            ring(setOf(XboxInput.DPAD_UP, XboxInput.DPAD_DOWN, XboxInput.DPAD_LEFT, XboxInput.DPAD_RIGHT), .40f, .47f, w*.075f)
+            ring(setOf(XboxInput.Y), .89f, .38f, w*.035f)
+            ring(setOf(XboxInput.B), .94f, .52f, w*.035f)
+            ring(setOf(XboxInput.A), .83f, .61f, w*.035f)
+            ring(setOf(XboxInput.X), .78f, .48f, w*.035f)
+            ring(setOf(XboxInput.L1, XboxInput.L2), .20f, .10f, w*.045f)
+            ring(setOf(XboxInput.R1, XboxInput.R2), .82f, .17f, w*.045f)
+            ring(setOf(XboxInput.BACK), .49f, .36f, w*.025f)
+            ring(setOf(XboxInput.START), .67f, .40f, w*.025f)
             if (leftX != 0f || leftY != 0f) drawCircle(active, w*.012f, Offset(w*(.35f + leftX*.045f), h*(.23f + leftY*.045f)))
             if (rightX != 0f || rightY != 0f) drawCircle(active, w*.012f, Offset(w*(.66f + rightX*.045f), h*(.60f + rightY*.045f)))
         }
