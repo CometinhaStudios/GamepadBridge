@@ -33,6 +33,13 @@ jobs:
           tar -xJf source/GamepadBridge-source.tar.xz -C /tmp/gamepadbridge-source
           cp -a /tmp/gamepadbridge-source/GamepadBridge/. .
 
+      - name: Apply GamepadBridge v0.2 updates
+        run: |
+          cp -a patches/v0.2/. .
+          base64 -d debug.keystore.b64 > debug.keystore
+          mkdir -p app/src/main/res/drawable-nodpi
+          curl -L --fail --retry 3 -A 'GamepadBridge build' 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Xbox-360-Wireless-Controller-White.png' -o app/src/main/res/drawable-nodpi/xbox360_white.png
+
       - name: Fix MappingScreen collection rendering
         run: |
           sed -i 's/collected.entries.takeLast(5)/collected.entries.toList().takeLast(5)/' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
@@ -46,7 +53,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-beta2
+          name: GamepadBridge-v0.2
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
