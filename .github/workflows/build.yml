@@ -36,7 +36,6 @@ jobs:
       - name: Apply GamepadBridge v0.2 updates
         run: |
           cp -a patches/v0.2/. .
-          base64 -d debug.keystore.b64 > debug.keystore
           mkdir -p app/src/main/res/drawable-nodpi
           curl -L --fail --retry 3 -A 'GamepadBridge build' 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Xbox-360-Wireless-Controller-White.png' -o app/src/main/res/drawable-nodpi/xbox360_white.png
 
