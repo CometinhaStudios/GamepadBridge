@@ -1,6 +1,8 @@
 name: Build GamepadBridge APK
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -8,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge from Beta 2
+    name: Build GamepadBridge v1.0
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -22,33 +24,48 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-      - name: Extract verified Beta 2 source
+      - name: Extract verified Beta 2 baseline
         run: |
           mkdir -p /tmp/gamepadbridge-source
           tar -xJf source/GamepadBridge-source.tar.xz -C /tmp/gamepadbridge-source
           cp -a /tmp/gamepadbridge-source/GamepadBridge/. .
-      - name: Apply Beta 2 compile compatibility fix
+      - name: Apply corrected v1.0 implementation
         run: |
-          sed -i 's/collected.entries.takeLast(5)/collected.entries.toList().takeLast(5)/' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-      - name: Set version
+          base64 --decode patches/beta1/patch.tar.gz.b64 > /tmp/gamepadbridge-beta1.tar.gz
+          tar -xzf /tmp/gamepadbridge-beta1.tar.gz -C /tmp
+          cp -a /tmp/beta1_patch/. .
+      - name: Set app version
         run: |
-          sed -i 's/versionCode = 1/versionCode = 2/' app/build.gradle.kts
-          sed -i 's/versionName = "0.1"/versionName = "Beta 2.1"/' app/build.gradle.kts
+          sed -i 's/versionCode = 1/versionCode = 3/' app/build.gradle.kts
+          sed -i 's/versionName = "0.1"/versionName = "v1.0"/' app/build.gradle.kts
+          grep -q 'versionCode = 3' app/build.gradle.kts
+          grep -q 'versionName = "v1.0"' app/build.gradle.kts
+      - name: Configure persistent debug signing
+        run: |
+          mkdir -p "$HOME/.android"
+          base64 --decode signing/gamepadbridge-debug.keystore.b64 > "$HOME/.android/debug.keystore"
+          chmod 600 "$HOME/.android/debug.keystore"
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
-      - name: Build debug APK
+      - name: Build APK
         run: ./gradlew assembleDebug --stacktrace
-      - name: Verify APK package and version
+      - name: Verify v1.0 APK and required fixes
         run: |
+          grep -q 'LaunchedEffect(index, candidate)' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          grep -q 'Anterior' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          grep -q 'Aperte Voltar novamente' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          grep -q 'ControllerTestScreen' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+          grep -q 'addBinderReceivedListenerSticky' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+          grep -q 'contains("HAT"' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
           test -n "$AAPT"
           "$AAPT" dump badging app/build/outputs/apk/debug/app-debug.apk | tee /tmp/apk-badging.txt
-          grep -q "package: name='com.gamepadbridge.app' versionCode='2' versionName='Beta 2.1'" /tmp/apk-badging.txt
+          grep -q "package: name='com.gamepadbridge.app' versionCode='3' versionName='v1.0'" /tmp/apk-badging.txt
           sha256sum app/build/outputs/apk/debug/app-debug.apk
-      - name: Upload APK artifact
+      - name: Upload v1.0 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-beta2.1
+          name: GamepadBridge-v1.0
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
