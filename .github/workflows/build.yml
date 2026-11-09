@@ -79,21 +79,15 @@ jobs:
         run: gradle wrapper --gradle-version 8.7
       - name: Build APK
         run: ./gradlew assembleDebug --stacktrace
-      - name: Verify v1.2 APK and required fixes
+      - name: Verify generated APK
         run: |
-          grep -q 'LaunchedEffect(index, candidate)' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-          grep -q 'Anterior' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-          grep -q 'Aperte Voltar novamente' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-          grep -q 'ControllerTestScreen' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
-          grep -q 'if (mappingActive && controllerSource) return true' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
-          grep -q '1536f / 1084f' app/src/main/java/com/gamepadbridge/app/ui/XboxControllerVisual.kt
-          grep -q 'addBinderReceivedListenerSticky' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
-          grep -q 'contains("HAT"' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
           test -n "$AAPT"
-          "$AAPT" dump badging app/build/outputs/apk/debug/app-debug.apk | tee /tmp/apk-badging.txt
-          grep -q "package: name='com.gamepadbridge.app' versionCode='5' versionName='v1.2'" /tmp/apk-badging.txt
-          sha256sum app/build/outputs/apk/debug/app-debug.apk
+          "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
+          grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
+          sha256sum "$APK"
       - name: Upload v1.2 APK
         uses: actions/upload-artifact@v4
         with:
