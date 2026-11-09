@@ -80,7 +80,7 @@ private fun CalibrationStep(node: String, profileStore: ProfileStore, onDone: ()
         Spacer(Modifier.height(6.dp))
         if (index < order.size) {
             val current = order[index]
-            LinearProgressIndicator(progress = { index.toFloat() / order.size }, modifier = Modifier.fillMaxWidth())
+            LinearProgressIndicator(progress = index.toFloat() / order.size, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(10.dp))
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
