@@ -46,9 +46,10 @@ s=s.replace('''        val axisMap = HashMap<String, Pair<XboxInput, Boolean>>()
 s=s.replace('''                is RawSource.Axis -> axisMap[input.code] = output to input.positiveDirection''','''                is RawSource.Axis -> axisMap.getOrPut(input.code) { mutableListOf() }.add(output to input.positiveDirection)''')
 s=s.replace('''        val mappedAxes = axisMap.values.mapNotNull { ControllerProfile.outputAxis(it.first) }.distinct()''','''        val mappedAxes = axisMap.values.flatten().mapNotNull { ControllerProfile.outputAxis(it.first) }.distinct()''')
 s=s.replace('''        axisMap: Map<String, Pair<XboxInput, Boolean>>,''','''        axisMap: Map<String, List<Pair<XboxInput, Boolean>>>,''')
-import re
-pattern = r'                val \(xbox, positiveDirection\) = axisMap\[line\.code\] \?: return\n.*?                ShizukuBridge\.injectAxisBatch\(axes, values, InputDevice\.SOURCE_JOYSTICK\)'
-new_block = '''                val mappings = axisMap[line.code] ?: return
+start = s.index("                val (xbox, positiveDirection) = axisMap[line.code] ?: return")
+end_marker = "                ShizukuBridge.injectAxisBatch(axes, values, InputDevice.SOURCE_JOYSTICK)"
+end = s.index(end_marker, start) + len(end_marker)
+new_block = """                val mappings = axisMap[line.code] ?: return
                 val raw = parseRawValue(line.value) ?: return
                 val range = axisRanges[line.code]
                 for ((xbox, positiveDirection) in mappings) {
@@ -81,9 +82,7 @@ new_block = '''                val mappings = axisMap[line.code] ?: return
                 val values = synchronized(axisValues) {
                     FloatArray(axes.size) { index -> axisValues[axes[index]] ?: 0f }
                 }
-                ShizukuBridge.injectAxisBatch(axes, values, InputDevice.SOURCE_JOYSTICK)'''
-s, n = re.subn(pattern, new_block, s, count=1, flags=re.S)
-if n != 1: raise SystemExit("could not patch EV_ABS handler")
+                ShizukuBridge.injectAxisBatch(axes, values, InputDevice.SOURCE_JOYSTICK)"""
 service.write_text(s)
 
 visual = Path("app/src/main/java/com/gamepadbridge/app/ui/XboxControllerVisual.kt")
