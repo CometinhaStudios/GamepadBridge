@@ -33,7 +33,7 @@ jobs:
           tar -xJf source/GamepadBridge-source.tar.xz -C /tmp/gamepadbridge-source
           cp -a /tmp/gamepadbridge-source/GamepadBridge/. .
 
-      - name: Apply GamepadBridge v0.4 updates
+      - name: Apply GamepadBridge v0.5 source layer
         run: |
           cp -a patches/v0.2/. .
           cp -a patches/v0.3/. .
