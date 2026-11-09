@@ -84,10 +84,8 @@ jobs:
           mkdir -p "$HOME/.android"
           base64 --decode signing/gamepadbridge-debug.keystore.b64 > "$HOME/.android/debug.keystore"
           chmod 600 "$HOME/.android/debug.keystore"
-      - name: Generate Gradle wrapper
-        run: gradle wrapper --gradle-version 8.7
       - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace
       - name: Verify generated APK
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
