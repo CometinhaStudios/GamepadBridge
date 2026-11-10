@@ -38,6 +38,12 @@ new='''            XboxInput.LS_X, XboxInput.LS_LEFT, XboxInput.LS_RIGHT -> Moti
             XboxInput.RS_Y, XboxInput.RS_UP, XboxInput.RS_DOWN -> MotionEvent.AXIS_RZ'''
 if old not in s: raise SystemExit("output axis block not found")
 s=s.replace(old,new)
+# Accept controllers whose L2/R2 are reported as digital key events as well as axes.
+if "XboxInput.L2 -> KeyEvent.KEYCODE_BUTTON_L2" not in s:
+    s = s.replace(
+        "XboxInput.R1 -> KeyEvent.KEYCODE_BUTTON_R1",
+        "XboxInput.R1 -> KeyEvent.KEYCODE_BUTTON_R1\\n            XboxInput.L2 -> KeyEvent.KEYCODE_BUTTON_L2\\n            XboxInput.R2 -> KeyEvent.KEYCODE_BUTTON_R2"
+    )
 profile.write_text(s)
 
 visual = Path("app/src/main/java/com/gamepadbridge/app/ui/XboxControllerVisual.kt")
