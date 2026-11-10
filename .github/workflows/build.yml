@@ -50,10 +50,10 @@ jobs:
       - name: Add native virtual Xbox 360 controller through Shizuku UInput
         run: |
           python3 scripts/apply-uinput.py
-      - name: Install Android NDK and CMake
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
+      - name: Set up Android SDK, NDK and CMake
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'ndk;27.2.12479018 cmake;3.22.1'
       - name: Block external controller keys from Android navigation during mapping
         run: |
           python3 - <<'PY'
@@ -85,7 +85,7 @@ jobs:
           sed -i 's/versionCode = 1/versionCode = 7/' app/build.gradle.kts
           sed -i 's/versionName = "0.1"/versionName = "v1.4"/' app/build.gradle.kts
           grep -q 'versionCode = 7' app/build.gradle.kts
-          grep -q 'versionName = "v1.4"' app/build.gradle.kts
+          grep -q 'versionName = "v1.5"' app/build.gradle.kts
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
