@@ -81,24 +81,14 @@ jobs:
 
           p = Path("app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt")
           s = p.read_text()
-          old = """                            val range = DeviceNodeReader.getAxisRanges(node)[line.code]
-                                          val rest = synchronized(axisRestValue) {
-                                              axisRestValue.getOrPut(line.code) { range?.current ?: raw }
-                                          }
-                                          val threshold = range?.let {
-                                              maxOf(2L, (it.max.toLong() - it.min.toLong()) / 16L)
-                                          } ?: 45L
-                                          if (abs(raw.toLong() - rest.toLong()) > threshold) {"""
-          new = """                            val range = initialRanges[line.code]
-                                          val rest = synchronized(axisRestValue) {
-                                              axisRestValue.getOrPut(line.code) { range?.current ?: raw }
-                                          }
-                                          val threshold = range?.let {
-                                              maxOf(2L, (it.max.toLong() - it.min.toLong()) / 16L)
-                                          } ?: 45L
-                                          if (abs(raw.toLong() - rest.toLong()) > threshold) {"""
-          assert old in s, "Calibration threshold block mismatch"
-          p.write_text(s.replace(old, new, 1))
+          old = "axisRestValue.getOrPut(line.code) { raw }"
+          assert old in s, "Calibration rest-value expression not found"
+          s = s.replace(old, "axisRestValue.getOrPut(line.code) { DeviceNodeReader.getAxisRanges(node)[line.code]?.current ?: raw }", 1)
+          old = "> 45L"
+          assert old in s, "Calibration movement threshold not found"
+          new = "> (DeviceNodeReader.getAxisRanges(node)[line.code]?.let { maxOf(2L, (it.max.toLong() - it.min.toLong()) / 16L) } ?: 45L)"
+          s = s.replace(old, new, 1)
+          p.write_text(s)
           PY
           grep -q 'val current: Int' app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt
           grep -q 'val threshold = range?.let' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
