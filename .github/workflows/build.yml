@@ -176,8 +176,22 @@ jobs:
               "        if (mappingScreenActive && (event.source and InputDevice.SOURCE_CLASS_MASK) == InputDevice.SOURCE_CLASS_JOYSTICK) return true" + nl +
               "        return super.dispatchGenericMotionEvent(event)" + nl + "    }" + nl + nl)
           if create_anchor not in a: raise SystemExit("MainActivity onCreate anchor not found")
-          if "override fun dispatchKeyEvent(event: KeyEvent)" not in a:
+          import re
+          key_method, motion_method = dispatch.split("    override fun dispatchGenericMotionEvent", 1)
+          motion_method = "    override fun dispatchGenericMotionEvent" + motion_method
+          key_pattern = r"    override fun dispatchKeyEvent\\(event: KeyEvent\\): Boolean \\{.*?\\n    \\}"
+          motion_pattern = r"    override fun dispatchGenericMotionEvent\\(event: MotionEvent\\): Boolean \\{.*?\\n    \\}"
+          if re.search(key_pattern, a, re.S):
+              a, n = re.subn(key_pattern, key_method.rstrip(), a, count=1, flags=re.S)
+              if n != 1: raise SystemExit("Could not replace existing dispatchKeyEvent")
+          else:
               a = a.replace(create_anchor, dispatch + create_anchor, 1)
+          if "override fun dispatchGenericMotionEvent(event: MotionEvent)" in a and "override fun dispatchKeyEvent(event: KeyEvent)" in a:
+              if re.search(motion_pattern, a, re.S):
+                  a, n = re.subn(motion_pattern, motion_method.rstrip(), a, count=1, flags=re.S)
+                  if n != 1: raise SystemExit("Could not replace existing dispatchGenericMotionEvent")
+              elif "override fun dispatchGenericMotionEvent(event: MotionEvent)" not in key_method:
+                  a = a.replace(create_anchor, motion_method + create_anchor, 1)
           route_anchor = '                    composable("mapping/{profileId}") { entry ->'
           route_effect = route_anchor + nl + "                        DisposableEffect(Unit) { mappingScreenActive = true; onDispose { mappingScreenActive = false } }"
           if route_anchor not in a: raise SystemExit("Mapping navigation route not found")
