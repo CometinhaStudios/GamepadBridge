@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.10 (double-back controller selection retry)
+    name: Build GamepadBridge v1.11 (remove switch-device button)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -109,10 +109,10 @@ jobs:
 
           # Remove the complete button containing the switch-controller label.
           import re
-          label = re.search(r'Text\s*\(\s*"Trocar de controle"\s*\)', s)
+          label = re.search(r'Text\s*\(\s*"Trocar dispositivo"\s*\)', s)
           if label:
               candidates = list(re.finditer(r'\b(?:TextButton|Button|OutlinedButton|ElevatedButton)\s*\(', s[:label.start()]))
-              if not candidates: raise SystemExit("Could not locate the Trocar de controle button")
+              if not candidates: raise SystemExit("Could not locate the Trocar dispositivo button")
               start = candidates[-1].start()
               opening = s.find("(", candidates[-1].start())
               depth = 0
@@ -155,7 +155,7 @@ jobs:
                               end = i + 1
                               break
               s = s[:start] + s[end:]
-          if "Trocar de controle" in s: raise SystemExit("Control-switch button label still exists")
+          if "Trocar dispositivo" in s: raise SystemExit("Control-switch button label still exists")
           mapping.write_text(s)
 
           activity = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
@@ -183,7 +183,7 @@ jobs:
           PY
           grep -q 'SystemClock.elapsedRealtime()' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'lastBackPress' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-          ! grep -q 'Trocar de controle' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          ! grep -q 'Trocar dispositivo' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'override fun dispatchKeyEvent(event: KeyEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'mappingScreenActive = true' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
       - name: Set app version
@@ -193,14 +193,14 @@ jobs:
           import re
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 13', s, count=1)
-          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.10"', s, count=1)
+          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 14', s, count=1)
+          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.11"', s, count=1)
           if code_count != 1 or name_count != 1:
               raise SystemExit("Could not safely set app version")
           p.write_text(s)
           PY
-          grep -q 'versionCode = 13' app/build.gradle.kts
-          grep -q 'versionName = "v1.10"' app/build.gradle.kts
+          grep -q 'versionCode = 14' app/build.gradle.kts
+          grep -q 'versionName = "v1.11"' app/build.gradle.kts
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
@@ -217,10 +217,10 @@ jobs:
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
           sha256sum "$APK"
-      - name: Upload v1.10 APK
+      - name: Upload v1.11 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.10
+          name: GamepadBridge-v1.11
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
