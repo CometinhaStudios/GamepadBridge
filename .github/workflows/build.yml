@@ -29,6 +29,19 @@ jobs:
           mkdir -p /tmp/gamepadbridge-source
           tar -xJf source/GamepadBridge-source.tar.xz -C /tmp/gamepadbridge-source
           cp -a /tmp/gamepadbridge-source/GamepadBridge/. .
+      - name: Export input capture sources for inspection
+        run: |
+          mkdir -p /tmp/input-source
+          find app/src/main -type f | grep -Ei 'DeviceNodeReader|CalibrationCapture|GamepadBridgeService|InputEvent' | while IFS= read -r f; do
+            mkdir -p "/tmp/input-source/$(dirname "$f")"
+            cp "$f" "/tmp/input-source/$f"
+          done
+      - name: Upload input capture sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: GamepadBridge-input-sources
+          path: /tmp/input-source/
+          if-no-files-found: warn
       - name: Apply corrected v1.0 implementation
         run: |
           base64 --decode patches/beta1/patch.tar.gz.b64 > /tmp/gamepadbridge-beta1.tar.gz
