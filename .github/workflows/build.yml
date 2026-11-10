@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.8
+    name: Build GamepadBridge v1.8 (analog capture fix)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -54,14 +54,72 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: 'ndk;27.2.12479018 cmake;3.22.1'
-      - name: Inspect complete mapping input pipeline
+      - name: Fix analog capture using the kernel's real neutral axis values
         run: |
-          echo "===== SOURCE FILE INVENTORY ====="
-          find app/src/main/java -type f -name '*.kt' -print
-          for f in app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt app/src/main/java/com/gamepadbridge/app/MainActivity.kt; do
-            echo "===== $f ====="
-            if [ -f "$f" ]; then nl -ba "$f"; else echo "FILE NOT FOUND"; fi
-          done
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt")
+          s = p.read_text()
+          old_decl = "    data class AxisRange(val min: Int, val max: Int) {"
+          new_decl = "    data class AxisRange(val min: Int, val max: Int, val current: Int) {"
+          if old_decl not in s:
+              raise SystemExit("Unexpected AxisRange declaration")
+          s = s.replace(old_decl, new_decl, 1)
+          old_regex = '        val regex = Regex("""(ABS_[A-Z0-9_]+)\\s*:\\s*value\\s+-?\\d+,\\s*min\\s+(-?\\d+),\\s*max\\s+(-?\\d+)""")'
+          new_regex = '        val regex = Regex("""(ABS_[A-Z0-9_]+)\\s*:\\s*value\\s+(-?\\d+),\\s*min\\s+(-?\\d+),\\s*max\\s+(-?\\d+)""")'
+          if old_regex not in s:
+              raise SystemExit("Unexpected axis range parser")
+          s = s.replace(old_regex, new_regex, 1)
+          old_parse = """            val min = match.groupValues[2].toIntOrNull() ?: return@forEach
+                      val max = match.groupValues[3].toIntOrNull() ?: return@forEach
+                      if (max > min) result[match.groupValues[1]] = AxisRange(min, max)"""
+          new_parse = """            val current = match.groupValues[2].toIntOrNull() ?: return@forEach
+                      val min = match.groupValues[3].toIntOrNull() ?: return@forEach
+                      val max = match.groupValues[4].toIntOrNull() ?: return@forEach
+                      if (max > min) result[match.groupValues[1]] = AxisRange(min, max, current)"""
+          if old_parse not in s:
+              raise SystemExit("Unexpected axis range parser body")
+          s = s.replace(old_parse, new_parse, 1)
+          p.write_text(s)
+
+          p = Path("app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt")
+          s = p.read_text()
+          old_start = """        val token = generation.incrementAndGet()
+                  synchronized(axisRestValue) { axisRestValue.clear() }
+                  thread(name = "calibration-capture") {"""
+          new_start = """        val token = generation.incrementAndGet()
+                  val initialRanges = DeviceNodeReader.getAxisRanges(node)
+                  synchronized(axisRestValue) {
+                      axisRestValue.clear()
+                      initialRanges.forEach { (code, range) -> axisRestValue[code] = range.current }
+                  }
+                  thread(name = "calibration-capture") {"""
+          if old_start not in s:
+              raise SystemExit("Unexpected calibration start block")
+          s = s.replace(old_start, new_start, 1)
+          old_rest = """                            val rest = synchronized(axisRestValue) {
+                                              axisRestValue.getOrPut(line.code) { raw }
+                                          }
+                                          if (abs(raw.toLong() - rest.toLong()) > 45L) {"""
+          new_rest = """                            val range = initialRanges[line.code]
+                                              val rest = synchronized(axisRestValue) {
+                                                  axisRestValue.getOrPut(line.code) {
+                                                      range?.current ?: raw
+                                                  }
+                                              }
+                                              val threshold = range?.let {
+                                                  maxOf(2L, (it.max.toLong() - it.min.toLong()) / 16L)
+                                              } ?: 45L
+                                              if (abs(raw.toLong() - rest.toLong()) > threshold) {"""
+          if old_rest not in s:
+              raise SystemExit("Unexpected calibration axis threshold block")
+          s = s.replace(old_rest, new_rest, 1)
+          p.write_text(s)
+          PY
+          grep -q 'val current: Int' app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt
+          grep -q 'initialRanges.forEach' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
+          grep -q 'val threshold = range?.let' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
       - name: Set app version
         run: |
           sed -i 's/versionCode = 1/versionCode = 11/' app/build.gradle.kts
