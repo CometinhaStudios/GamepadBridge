@@ -62,11 +62,8 @@ jobs:
 
           p = Path("app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt")
           s = p.read_text()
-          s, n = re.subn(
-              r'data class AxisRange\(val min: Int, val max: Int\)',
-              'data class AxisRange(val min: Int, val max: Int, val current: Int)',
-              s, count=1
-          )
+          s, n = re.subn(r'data class AxisRange\(val min: Int, val max: Int\)',
+                         'data class AxisRange(val min: Int, val max: Int, val current: Int)', s, count=1)
           if n != 1:
               raise SystemExit("AxisRange declaration not found")
           lines = s.splitlines()
@@ -78,7 +75,10 @@ jobs:
               raise SystemExit("Axis range regex not found")
           s = "\n".join(lines) + "\n"
           pattern = r'(?m)^(\s*)val min = match\.groupValues\[2\]\.toIntOrNull\(\) \?: return@forEach\n\s*val max = match\.groupValues\[3\]\.toIntOrNull\(\) \?: return@forEach\n\s*if \(max > min\) result\[match\.groupValues\[1\]\] = AxisRange\(min, max\)'
-          replacement = r'\1val current = match.groupValues[2].toIntOrNull() ?: return@forEach\n\1val min = match.groupValues[3].toIntOrNull() ?: return@forEach\n\1val max = match.groupValues[4].toIntOrNull() ?: return@forEach\n\1if (max > min) result[match.groupValues[1]] = AxisRange(min, max, current)'
+          replacement = (r'\1val current = match.groupValues[2].toIntOrNull() ?: return@forEach' + '\n' +
+                         r'\1val min = match.groupValues[3].toIntOrNull() ?: return@forEach' + '\n' +
+                         r'\1val max = match.groupValues[4].toIntOrNull() ?: return@forEach' + '\n' +
+                         r'\1if (max > min) result[match.groupValues[1]] = AxisRange(min, max, current)')
           s, n = re.subn(pattern, replacement, s, count=1)
           if n != 1:
               raise SystemExit("Axis range parser body not found")
@@ -89,21 +89,22 @@ jobs:
           marker = "        val token = generation.incrementAndGet()"
           if marker not in s:
               raise SystemExit("Calibration start marker not found")
-          s = s.replace(marker, marker + """
+          insert = """        val token = generation.incrementAndGet()
                   val initialRanges = DeviceNodeReader.getAxisRanges(node)
                   synchronized(axisRestValue) {
                       axisRestValue.clear()
                       initialRanges.forEach { (code, range) -> axisRestValue[code] = range.current }
-                  }""", 1)
+                  }"""
+          s = s.replace(marker, insert, 1)
           pattern = r'(?m)^(\s*)val rest = synchronized\(axisRestValue\) \{\n\s*axisRestValue\.getOrPut\(line\.code\) \{ raw \}\n\s*\}\n\s*if \(abs\(raw\.toLong\(\) - rest\.toLong\(\)\) > 45L\) \{'
-          replacement = r'''\1val range = initialRanges[line.code]
-\1val rest = synchronized(axisRestValue) {
-\1    axisRestValue.getOrPut(line.code) { range?.current ?: raw }
-\1}
-\1val threshold = range?.let {
-\1    maxOf(2L, (it.max.toLong() - it.min.toLong()) / 16L)
-\1} ?: 45L
-\1if (abs(raw.toLong() - rest.toLong()) > threshold) {'''
+          replacement = (r'\1val range = initialRanges[line.code]' + '\n' +
+                         r'\1val rest = synchronized(axisRestValue) {' + '\n' +
+                         r'\1    axisRestValue.getOrPut(line.code) { range?.current ?: raw }' + '\n' +
+                         r'\1}' + '\n' +
+                         r'\1val threshold = range?.let {' + '\n' +
+                         r'\1    maxOf(2L, (it.max.toLong() - it.min.toLong()) / 16L)' + '\n' +
+                         r'\1} ?: 45L' + '\n' +
+                         r'\1if (abs(raw.toLong() - rest.toLong()) > threshold) {')
           s, n = re.subn(pattern, replacement, s, count=1)
           if n != 1:
               raise SystemExit("Calibration threshold block not found")
