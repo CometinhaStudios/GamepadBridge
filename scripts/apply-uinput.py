@@ -397,26 +397,46 @@ fun AnalogSettingsScreen(onBack: () -> Unit) {
 main_activity = java / "MainActivity.kt"
 main = main_activity.read_text()
 if "AnalogSettingsScreen" not in main:
-    import_line = "import com.gamepadbridge.app.ui.ControllerTestScreen"
+    import_line = "import com.gamepadbridge.app.ui.MappingScreen"
     if import_line not in main:
-        raise SystemExit("MainActivity import anchor missing")
-    main = main.replace(import_line, import_line + "\nimport com.gamepadbridge.app.ui.AnalogSettingsScreen")
-    home_call = 'onProfiles = { nav.navigate("profiles") },'
-    if home_call not in main:
-        raise SystemExit("HomeScreen profiles navigation anchor missing")
-    main = main.replace(home_call, home_call + '\n                            onSettings = { nav.navigate("settings") },', 1)
-    route_anchor = 'composable("test") { ControllerTestScreen { nav.popBackStack("home", false) } }'
+        raise SystemExit("MainActivity MappingScreen import anchor missing")
+    main = main.replace(import_line, import_line + "\nimport com.gamepadbridge.app.ui.AnalogSettingsScreen", 1)
+    toggle_anchor = """                            onToggleService = { starting ->
+                                if (starting) GamepadBridgeService.start(this@MainActivity)
+                                else GamepadBridgeService.stop(this@MainActivity)
+                            }"""
+    if toggle_anchor not in main:
+        raise SystemExit("MainActivity service callback anchor missing")
+    main = main.replace(toggle_anchor, """                            onOpenSettings = { navController.navigate("settings") },
+""" + toggle_anchor, 1)
+    route_anchor = """                    composable("mapping/{profileId}") { entry ->"""
     if route_anchor not in main:
-        raise SystemExit("MainActivity test route anchor missing")
-    main = main.replace(route_anchor, route_anchor + '\n                    composable("settings") { AnalogSettingsScreen { nav.popBackStack("home", false) } }', 1)
-    signature = "    onProfiles: () -> Unit,"
-    if signature not in main:
-        raise SystemExit("HomeScreen signature anchor missing")
-    main = main.replace(signature, signature + "\n    onSettings: () -> Unit,", 1)
-    home_button_anchor = '            OutlinedButton(onClick = onTest, modifier = Modifier.fillMaxWidth()) { Text("Testar controle") }'
-    if home_button_anchor not in main:
-        raise SystemExit("HomeScreen test button anchor missing")
-    main = main.replace(home_button_anchor, home_button_anchor + '\n            OutlinedButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Configurações") }', 1)
+        raise SystemExit("MainActivity mapping route anchor missing")
+    settings_route = """                    composable("settings") {
+                        AnalogSettingsScreen { navController.popBackStack() }
+                    }
+"""
+    main = main.replace(route_anchor, settings_route + route_anchor, 1)
+    signature_anchor = """    onMap: () -> Unit,
+    onToggleService: (Boolean) -> Unit"""
+    if signature_anchor not in main:
+        raise SystemExit("HomeScreen callback signature anchor missing")
+    main = main.replace(signature_anchor, """    onMap: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onToggleService: (Boolean) -> Unit""", 1)
+    column_end_anchor = """        }
+    }
+
+    if (showCreateDialog) {"""
+    if column_end_anchor not in main:
+        raise SystemExit("HomeScreen layout insertion anchor missing")
+    main = main.replace(column_end_anchor, """        }
+        OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
+            Text("Configurações")
+        }
+    }
+
+    if (showCreateDialog) {""", 1)
     main_activity.write_text(main)
 
 service = java / "service/GamepadBridgeService.kt"
