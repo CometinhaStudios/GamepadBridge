@@ -31,10 +31,10 @@ jobs:
           cp -a /tmp/gamepadbridge-source/GamepadBridge/. .
       - name: Inspect physical input capture sources
         run: |
-          find app/src/main -type f \\( -iname '*DeviceNodeReader*' -o -iname '*CalibrationCapture*' -o -iname '*Input*' \\) -print
-          for f in $(find app/src/main -type f \\( -iname '*DeviceNodeReader*' -o -iname '*CalibrationCapture*' \\)); do
+          find app/src/main -type f | grep -Ei 'DeviceNodeReader|CalibrationCapture' || true
+          find app/src/main -type f | grep -Ei 'DeviceNodeReader|CalibrationCapture' | while IFS= read -r f; do
             echo "===== $f ====="
-            sed -n '1,280p' "$f"
+            sed -n '1,300p' "$f"
           done
           exit 1
       - name: Apply corrected v1.0 implementation
