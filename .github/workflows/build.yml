@@ -81,17 +81,23 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           p = Path("app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt")
           s = p.read_text()
-          pattern = re.compile(r'''    BackHandler \{\n        val now = SystemClock.elapsedRealtime\(\)\n        if \(now - lastBackAt < 900L\) onDone\(\)\n        else \{\n            lastBackAt = now\n            Toast.makeText\(context, "Aperte Voltar novamente para sair do mapeamento", Toast.LENGTH_SHORT\).show\(\)\n        \}\n    \}''')
-          replacement = '''    BackHandler(enabled = true) {
-          // Botões físicos mapeados como Back não podem encerrar a calibração.
-    }'''
-          s, count = pattern.subn(replacement, s, count=1)
-          if count != 1:
-              raise SystemExit("Expected mapping BackHandler block not found; refusing to patch")
+          old = """    BackHandler {
+          val now = SystemClock.elapsedRealtime()
+          if (now - lastBackAt < 900L) onDone()
+          else {
+              lastBackAt = now
+              Toast.makeText(context, "Aperte Voltar novamente para sair do mapeamento", Toast.LENGTH_SHORT).show()
+          }
+      }"""
+          new = """    BackHandler(enabled = true) {
+          // Bloqueia o botão físico Back durante o mapeamento.
+      }"""
+          if old not in s:
+              raise SystemExit("Expected BackHandler block not found; refusing to patch")
+          s = s.replace(old, new, 1)
           p.write_text(s)
           PY
           grep -q 'BackHandler(enabled = true)' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
