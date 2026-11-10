@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.12 (based on verified v1.11)
+    name: Build GamepadBridge v1.13 (based on verified v1.11)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -170,10 +170,10 @@ jobs:
               a = a.replace(class_anchor, class_anchor + nl + "    @Volatile private var mappingScreenActive = false", 1)
           create_anchor = "    override fun onCreate(savedInstanceState: Bundle?) {"
           dispatch = ("    override fun dispatchKeyEvent(event: KeyEvent): Boolean {" + nl +
-              "        if (mappingScreenActive && event.keyCode != KeyEvent.KEYCODE_BACK && (event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK))) return true" + nl +
+              "        if (mappingScreenActive && event.keyCode != KeyEvent.KEYCODE_BACK && event.device != null && !event.device.isVirtual) return true" + nl +
               "        return super.dispatchKeyEvent(event)" + nl + "    }" + nl + nl +
               "    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {" + nl +
-              "        if (mappingScreenActive && (event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK))) return true" + nl +
+              "        if (mappingScreenActive && (event.source and InputDevice.SOURCE_CLASS_MASK) == InputDevice.SOURCE_CLASS_JOYSTICK) return true" + nl +
               "        return super.dispatchGenericMotionEvent(event)" + nl + "    }" + nl + nl)
           if create_anchor not in a: raise SystemExit("MainActivity onCreate anchor not found")
           if "override fun dispatchKeyEvent(event: KeyEvent)" not in a:
@@ -189,6 +189,8 @@ jobs:
           ! grep -q 'Trocar dispositivo' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'override fun dispatchKeyEvent(event: KeyEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'override fun dispatchGenericMotionEvent(event: MotionEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+          grep -q 'event.device != null && !event.device.isVirtual' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+          grep -q 'InputDevice.SOURCE_CLASS_MASK' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'mappingScreenActive = true' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
       - name: Set app version
         run: |
@@ -197,14 +199,14 @@ jobs:
           import re
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 15', s, count=1)
-          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.12"', s, count=1)
+          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 16', s, count=1)
+          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.13"', s, count=1)
           if code_count != 1 or name_count != 1:
               raise SystemExit("Could not safely set app version")
           p.write_text(s)
           PY
-          grep -q 'versionCode = 15' app/build.gradle.kts
-          grep -q 'versionName = "v1.12"' app/build.gradle.kts
+          grep -q 'versionCode = 16' app/build.gradle.kts
+          grep -q 'versionName = "v1.13"' app/build.gradle.kts
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
@@ -221,10 +223,10 @@ jobs:
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
           sha256sum "$APK"
-      - name: Upload v1.12 APK
+      - name: Upload v1.13 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.12
+          name: GamepadBridge-v1.13
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
