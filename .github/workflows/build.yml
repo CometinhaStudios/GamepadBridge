@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.9 (mapping navigation fix)
+    name: Build GamepadBridge v1.10 (double-back controller selection)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -92,9 +92,70 @@ jobs:
           selected_anchor = "    var selectedDevice by remember { mutableStateOf<DeviceNodeReader.DeviceEntry?>(null) }"
           if selected_anchor not in s: raise SystemExit("selectedDevice state not found")
           s = s.replace("    BackHandler(enabled = true) { }", "", 1)
-          handler = "    BackHandler(enabled = true) { if (selectedDevice != null) selectedDevice = null else onDone() }"
-          if handler not in s: s = s.replace(selected_anchor, selected_anchor + nl + handler, 1)
-          if handler not in s: raise SystemExit("Functional mapping BackHandler insertion failed")
+          if "import android.os.SystemClock" not in s:
+              s = s.replace(import_anchor, "import android.os.SystemClock" + nl + import_anchor, 1)
+          handler_state = "    var lastBackPress by remember { mutableLongStateOf(0L) }"
+          if handler_state not in s:
+              s = s.replace(selected_anchor, selected_anchor + nl + handler_state, 1)
+          handler = ("    BackHandler(enabled = true) {" + nl +
+              "        val now = SystemClock.elapsedRealtime()" + nl +
+              "        if (now - lastBackPress <= 1500L) {" + nl +
+              "            lastBackPress = 0L" + nl +
+              "            if (selectedDevice != null) selectedDevice = null else onDone()" + nl +
+              "        } else { lastBackPress = now }" + nl + "    }")
+          if "SystemClock.elapsedRealtime()" not in s:
+              s = s.replace(handler_state, handler_state + nl + handler, 1)
+          if "SystemClock.elapsedRealtime()" not in s: raise SystemExit("Double-back handler insertion failed")
+
+          # Remove the complete button containing the switch-controller label.
+          import re
+          label = re.search(r'Text\s*\(\s*"Trocar de controle"\s*\)', s)
+          if label:
+              candidates = list(re.finditer(r'\b(?:TextButton|Button|OutlinedButton|ElevatedButton)\s*\(', s[:label.start()]))
+              if not candidates: raise SystemExit("Could not locate the Trocar de controle button")
+              start = candidates[-1].start()
+              opening = s.find("(", candidates[-1].start())
+              depth = 0
+              in_string = False
+              escaped = False
+              close = -1
+              for i in range(opening, len(s)):
+                  ch = s[i]
+                  if in_string:
+                      if escaped: escaped = False
+                      elif ch == "\\": escaped = True
+                      elif ch == '"': in_string = False
+                      continue
+                  if ch == '"': in_string = True
+                  elif ch == "(": depth += 1
+                  elif ch == ")":
+                      depth -= 1
+                      if depth == 0:
+                          close = i
+                          break
+              if close < 0: raise SystemExit("Could not parse button parameters")
+              end = close + 1
+              while end < len(s) and s[end].isspace(): end += 1
+              if end < len(s) and s[end] == "{":
+                  depth = 0
+                  in_string = False
+                  escaped = False
+                  for i in range(end, len(s)):
+                      ch = s[i]
+                      if in_string:
+                          if escaped: escaped = False
+                          elif ch == "\\": escaped = True
+                          elif ch == '"': in_string = False
+                          continue
+                      if ch == '"': in_string = True
+                      elif ch == "{": depth += 1
+                      elif ch == "}":
+                          depth -= 1
+                          if depth == 0:
+                              end = i + 1
+                              break
+              s = s[:start] + s[end:]
+          if "Trocar de controle" in s: raise SystemExit("Control-switch button label still exists")
           mapping.write_text(s)
 
           activity = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
@@ -130,8 +191,8 @@ jobs:
           import re
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 12', s, count=1)
-          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.9"', s, count=1)
+          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 13', s, count=1)
+          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.10"', s, count=1)
           if code_count != 1 or name_count != 1:
               raise SystemExit("Could not safely set app version")
           p.write_text(s)
@@ -154,10 +215,10 @@ jobs:
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
           sha256sum "$APK"
-      - name: Upload v1.9 APK
+      - name: Upload v1.10 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.9
+          name: GamepadBridge-v1.10
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
