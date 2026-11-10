@@ -81,18 +81,21 @@ jobs:
 
           p = Path("app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt")
           s = p.read_text()
-          old = """        val token = generation.incrementAndGet()
-                  synchronized(axisRestValue) { axisRestValue.clear() }
-                  thread(name = "calibration-capture") {"""
-          new = """        val token = generation.incrementAndGet()
-                  val initialRanges = DeviceNodeReader.getAxisRanges(node)
-                  synchronized(axisRestValue) {
-                      axisRestValue.clear()
-                      initialRanges.forEach { (code, range) -> axisRestValue[code] = range.current }
-                  }
-                  thread(name = "calibration-capture") {"""
-          assert old in s, "Calibration start block mismatch"
-          s = s.replace(old, new, 1)
+          import re
+          start_pattern = re.compile(r'(?m)^(\s*)val token = generation\.incrementAndGet\(\)\n\s*synchronized\(axisRestValue\) \{ axisRestValue\.clear\(\) \}\n\s*thread\(name = "calibration-capture"\) \{')
+          start_match = start_pattern.search(s)
+          assert start_match, "Calibration start block not found"
+          indent = start_match.group(1)
+          start_replacement = (
+              indent + "val token = generation.incrementAndGet()\\n" +
+              indent + "val initialRanges = DeviceNodeReader.getAxisRanges(node)\\n" +
+              indent + "synchronized(axisRestValue) {\\n" +
+              indent + "    axisRestValue.clear()\\n" +
+              indent + "    initialRanges.forEach { (code, range) -> axisRestValue[code] = range.current }\\n" +
+              indent + "}\\n" +
+              indent + 'thread(name = "calibration-capture") {'
+          )
+          s = start_pattern.sub(lambda _: start_replacement, s, count=1)
           old = """                            val rest = synchronized(axisRestValue) {
                                               axisRestValue.getOrPut(line.code) { raw }
                                           }
