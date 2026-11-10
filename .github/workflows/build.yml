@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.7
+    name: Build GamepadBridge v1.8
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -80,18 +80,59 @@ jobs:
               s = s.replace(needle, guard, 1)
               p.write_text(s)
           PY
-      - name: Inspect complete mapping input pipeline
+      - name: Fix analog calibration baseline detection
         run: |
-          for f in app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt app/src/main/java/com/gamepadbridge/app/MainActivity.kt; do
-            echo "===== $f ====="
-            if [ -f "$f" ]; then nl -ba "$f"; else echo "FILE NOT FOUND"; fi
-          done
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt")
+          s = p.read_text()
+          s = s.replace(
+              "data class AxisRange(val min: Int, val max: Int) {",
+              "data class AxisRange(val min: Int, val max: Int, val current: Int) {"
+          )
+          s = s.replace(
+              'val regex = Regex("""(ABS_[A-Z0-9_]+)\\s*:\\s*value\\s+-?\\d+,\\s*min\\s+(-?\\d+),\\s*max\\s+(-?\\d+)""")',
+              'val regex = Regex("""(ABS_[A-Z0-9_]+)\\s*:\\s*value\\s+(-?\\d+),\\s*min\\s+(-?\\d+),\\s*max\\s+(-?\\d+)""")'
+          )
+          s = s.replace(
+              'val min = match.groupValues[2].toIntOrNull() ?: return@forEach\n            val max = match.groupValues[3].toIntOrNull() ?: return@forEach\n            if (max > min) result[match.groupValues[1]] = AxisRange(min, max)',
+              'val current = match.groupValues[2].toIntOrNull() ?: return@forEach\n            val min = match.groupValues[3].toIntOrNull() ?: return@forEach\n            val max = match.groupValues[4].toIntOrNull() ?: return@forEach\n            if (max > min) result[match.groupValues[1]] = AxisRange(min, max, current)'
+          )
+          if "val current = match.groupValues[2]" not in s:
+              raise SystemExit("Could not patch axis range parser safely")
+          p.write_text(s)
+
+          p = Path("app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt")
+          s = p.read_text()
+          s = s.replace(
+              '        synchronized(axisRestValue) { axisRestValue.clear() }',
+              '''        val initialRanges = DeviceNodeReader.getAxisRanges(node)
+                  .mapValues { it.value.current }
+              synchronized(axisRestValue) {
+                  axisRestValue.clear()
+                  axisRestValue.putAll(initialRanges)
+              }'''
+          )
+          s = s.replace(
+              '                            if (abs(raw.toLong() - rest.toLong()) > 45L) {',
+              '''                            val range = initialRanges[line.code]
+                            val span = DeviceNodeReader.getAxisRanges(node)[line.code]
+                                ?.let { (it.max - it.min).toLong() } ?: 0L
+                            val threshold = maxOf(2L, span / 12L)
+                            if (abs(raw.toLong() - rest.toLong()) > threshold) {'''
+          )
+          if "axisRestValue.putAll(initialRanges)" not in s or "span / 12L" not in s:
+              raise SystemExit("Could not patch calibration baseline safely")
+          p.write_text(s)
+          PY
+          grep -q 'val current: Int' app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt
+          grep -q 'axisRestValue.putAll(initialRanges)' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
       - name: Set app version
         run: |
-          sed -i 's/versionCode = 1/versionCode = 10/' app/build.gradle.kts
-          sed -i 's/versionName = "0.1"/versionName = "v1.7"/' app/build.gradle.kts
-          grep -q 'versionCode = 10' app/build.gradle.kts
-          grep -q 'versionName = "v1.7"' app/build.gradle.kts
+          sed -i 's/versionCode = 1/versionCode = 11/' app/build.gradle.kts
+          sed -i 's/versionName = "0.1"/versionName = "v1.8"/' app/build.gradle.kts
+          grep -q 'versionCode = 11' app/build.gradle.kts
+          grep -q 'versionName = "v1.8"' app/build.gradle.kts
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
@@ -108,10 +149,10 @@ jobs:
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
           sha256sum "$APK"
-      - name: Upload v1.7 APK
+      - name: Upload v1.8 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.7
+          name: GamepadBridge-v1.8
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
