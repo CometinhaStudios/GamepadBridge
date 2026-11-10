@@ -158,8 +158,8 @@ static int keycode(int k) {
         case 106: return BTN_THUMBL; case 107: return BTN_THUMBR;
         case 108: return BTN_START; case 109: return BTN_SELECT;
         case 110: return BTN_MODE;
-        case 19: return KEY_UP; case 20: return KEY_DOWN;
-        case 21: return KEY_LEFT; case 22: return KEY_RIGHT;
+        case 19: return BTN_DPAD_UP; case 20: return BTN_DPAD_DOWN;
+        case 21: return BTN_DPAD_LEFT; case 22: return BTN_DPAD_RIGHT;
         case 23: return BTN_SOUTH;
         default: return 0;
     }
@@ -192,7 +192,7 @@ Java_com_gamepadbridge_app_inject_UInputNative_create(JNIEnv*, jclass) {
     if(g_fd>=0){ ioctl(g_fd, UI_DEV_DESTROY); close(g_fd); g_fd=-1; }
     int fd=open("/dev/uinput", O_WRONLY|O_NONBLOCK);
     if(fd<0){ LOGE("open /dev/uinput for create: %s", strerror(errno)); return JNI_FALSE; }
-    const int keys[]={BTN_A,BTN_B,BTN_X,BTN_Y,BTN_TL,BTN_TR,BTN_TL2,BTN_TR2,BTN_START,BTN_SELECT,BTN_MODE,BTN_THUMBL,BTN_THUMBR,KEY_UP,KEY_DOWN,KEY_LEFT,KEY_RIGHT};
+    const int keys[]={BTN_A,BTN_B,BTN_X,BTN_Y,BTN_TL,BTN_TR,BTN_TL2,BTN_TR2,BTN_START,BTN_SELECT,BTN_MODE,BTN_THUMBL,BTN_THUMBR,BTN_DPAD_UP,BTN_DPAD_DOWN,BTN_DPAD_LEFT,BTN_DPAD_RIGHT};
     const int axes[]={ABS_X,ABS_Y,ABS_RX,ABS_RY,ABS_Z,ABS_RZ,ABS_HAT0X,ABS_HAT0Y};
     if(ioctl(fd, UI_SET_EVBIT, EV_KEY)<0 || ioctl(fd, UI_SET_EVBIT, EV_ABS)<0 || ioctl(fd, UI_SET_EVBIT, EV_SYN)<0) goto fail;
     for(int k:keys) if(ioctl(fd,UI_SET_KEYBIT,k)<0) goto fail;
@@ -225,7 +225,7 @@ Java_com_gamepadbridge_app_inject_UInputNative_sendAxis(JNIEnv*,jclass,jint andr
     if(a==ABS_Z || a==ABS_RZ) v=(int)(value<0?0:(value>1?255:value*255.0f));
     else if(a==ABS_HAT0X || a==ABS_HAT0Y) v=value>0.5f?1:(value< -0.5f?-1:0);
     else v=(int)(value< -1?-32768:(value>1?32767:value*32767.0f));
-    if(emit(EV_ABS,a,v)==0) sync();
+    if(emit(EV_ABS,a,v)==0) emit_sync();
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_gamepadbridge_app_inject_UInputNative_destroy(JNIEnv*,jclass){
