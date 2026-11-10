@@ -181,7 +181,9 @@ jobs:
           if "mappingScreenActive = true" not in a: a = a.replace(route_anchor, route_effect, 1)
           activity.write_text(a)
           PY
-          grep -q 'BackHandler(enabled = true) { if (selectedDevice != null) selectedDevice = null else onDone() }' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          grep -q 'SystemClock.elapsedRealtime()' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+grep -q 'lastBackPress' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+grep -qv 'Trocar de controle' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'override fun dispatchKeyEvent(event: KeyEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'mappingScreenActive = true' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
       - name: Set app version
@@ -197,8 +199,8 @@ jobs:
               raise SystemExit("Could not safely set app version")
           p.write_text(s)
           PY
-          grep -q 'versionCode = 12' app/build.gradle.kts
-          grep -q 'versionName = "v1.9"' app/build.gradle.kts
+          grep -q 'versionCode = 13' app/build.gradle.kts
+          grep -q 'versionName = "v1.10"' app/build.gradle.kts
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
