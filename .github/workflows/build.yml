@@ -54,6 +54,12 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: 'ndk;27.2.12479018 cmake;3.22.1'
+      - name: Diagnose analog calibration source
+        run: |
+          echo '--- DeviceNodeReader axis ranges ---'
+          grep -n -C 5 -E 'AxisRange|ABS_|value|axisRanges' app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt || true
+          echo '--- Calibration capture axis logic ---'
+          grep -n -C 8 -E 'axisRest|threshold|45L|raw|axis' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt || true
       - name: Fix analog capture using the kernel's real neutral axis values
         run: |
           python3 - <<'PY'
