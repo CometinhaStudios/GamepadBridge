@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.10 (double-back controller selection)
+    name: Build GamepadBridge v1.10 (double-back controller selection retry)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -183,7 +183,7 @@ jobs:
           PY
           grep -q 'SystemClock.elapsedRealtime()' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
 grep -q 'lastBackPress' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-grep -qv 'Trocar de controle' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+! grep -q 'Trocar de controle' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'override fun dispatchKeyEvent(event: KeyEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'mappingScreenActive = true' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
       - name: Set app version
