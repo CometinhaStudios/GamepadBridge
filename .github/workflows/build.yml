@@ -108,17 +108,16 @@ jobs:
               s = s.replace(handler_state, handler_state + nl + handler, 1)
           if "SystemClock.elapsedRealtime()" not in s: raise SystemExit("Double-back handler insertion failed")
 
-          # Remove the switch-device row from the inspected Beta 2 source.
-          s, removed = re.subn(
-              r'(?m)^[ \\t]*Row\\(Modifier\\.fillMaxWidth\\(\\), horizontalArrangement = Arrangement\\.Start\\) \\{\\r?\\n'
-              r'[ \\t]*TextButton\\(onClick = onBack\\) \\{ Text\\("Trocar dispositivo"\\) \\}[^\\r\\n]*\\r?\\n'
-              r'[ \\t]*\\}\\r?\\n?',
-              "",
-              s,
-              count=1
-          )
-          if removed != 1:
-              raise SystemExit("Could not remove switch-device row from MappingScreen")
+          # Remove the switch-device button and its one-line Row wrapper.
+          lines = s.splitlines(keepends=True)
+          matches = [i for i, line in enumerate(lines) if 'TextButton(onClick = onBack) { Text("Trocar dispositivo") }' in line]
+          if len(matches) != 1:
+              raise SystemExit(f"Expected exactly one switch-device button, found {len(matches)}")
+          i = matches[0]
+          if i == 0 or i + 1 >= len(lines) or "Row(" not in lines[i - 1] or lines[i + 1].strip() != "}":
+              raise SystemExit("Switch-device button wrapper differs from inspected source; refusing unsafe removal")
+          del lines[i - 1:i + 2]
+          s = "".join(lines)
           if "Trocar dispositivo" in s:
               raise SystemExit("Switch-device label remains in MappingScreen")
           mapping.write_text(s)
