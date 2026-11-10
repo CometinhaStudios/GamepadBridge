@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.12 (capture-only controller mapping)
+    name: Build GamepadBridge v1.12 (based on verified v1.11)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -81,7 +81,6 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           nl = chr(10)
           mapping = Path("app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt")
@@ -108,28 +107,55 @@ jobs:
               s = s.replace(handler_state, handler_state + nl + handler, 1)
           if "SystemClock.elapsedRealtime()" not in s: raise SystemExit("Double-back handler insertion failed")
 
-          # Remove the exact button line, then remove its now-empty Row wrapper.
-          lines = s.splitlines(keepends=True)
-          matches = [i for i, line in enumerate(lines) if "Trocar dispositivo" in line]
-          if len(matches) != 1:
-              raise SystemExit(f"Expected one switch-device label line, found {len(matches)}")
-          i = matches[0]
-          if "TextButton" not in lines[i] or "onClick = onBack" not in lines[i]:
-              raise SystemExit("Switch-device label is not in the expected TextButton; refusing unsafe removal")
-          del lines[i]
-          # Find the surrounding Row and its closing brace, allowing harmless blank lines.
-          row_index = next((j for j in range(i - 1, max(-1, i - 5), -1) if "Row(" in lines[j]), None)
-          if row_index is None:
-              raise SystemExit("Could not locate the switch-device Row wrapper")
-          close_index = next((j for j in range(i, min(len(lines), i + 4)) if lines[j].strip() == "}"), None)
-          if close_index is None:
-              raise SystemExit("Could not locate the switch-device Row closing brace")
-          if any(line.strip() for line in lines[row_index + 1:close_index]):
-              raise SystemExit("Switch-device Row contains other content; refusing unsafe removal")
-          del lines[row_index:close_index + 1]
-          s = "".join(lines)
-          if "Trocar dispositivo" in s:
-              raise SystemExit("Switch-device label remains in MappingScreen")
+          # Remove the complete button containing the switch-controller label.
+          import re
+          label = re.search(r'Text\s*\(\s*"Trocar dispositivo"\s*\)', s)
+          if label:
+              candidates = list(re.finditer(r'\b(?:TextButton|Button|OutlinedButton|ElevatedButton)\s*\(', s[:label.start()]))
+              if not candidates: raise SystemExit("Could not locate the Trocar dispositivo button")
+              start = candidates[-1].start()
+              opening = s.find("(", candidates[-1].start())
+              depth = 0
+              in_string = False
+              escaped = False
+              close = -1
+              for i in range(opening, len(s)):
+                  ch = s[i]
+                  if in_string:
+                      if escaped: escaped = False
+                      elif ch == "\\": escaped = True
+                      elif ch == '"': in_string = False
+                      continue
+                  if ch == '"': in_string = True
+                  elif ch == "(": depth += 1
+                  elif ch == ")":
+                      depth -= 1
+                      if depth == 0:
+                          close = i
+                          break
+              if close < 0: raise SystemExit("Could not parse button parameters")
+              end = close + 1
+              while end < len(s) and s[end].isspace(): end += 1
+              if end < len(s) and s[end] == "{":
+                  depth = 0
+                  in_string = False
+                  escaped = False
+                  for i in range(end, len(s)):
+                      ch = s[i]
+                      if in_string:
+                          if escaped: escaped = False
+                          elif ch == "\\": escaped = True
+                          elif ch == '"': in_string = False
+                          continue
+                      if ch == '"': in_string = True
+                      elif ch == "{": depth += 1
+                      elif ch == "}":
+                          depth -= 1
+                          if depth == 0:
+                              end = i + 1
+                              break
+              s = s[:start] + s[end:]
+          if "Trocar dispositivo" in s: raise SystemExit("Control-switch button label still exists")
           mapping.write_text(s)
 
           activity = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
@@ -137,23 +163,17 @@ jobs:
           bundle_import = "import android.os.Bundle"
           if bundle_import not in a: raise SystemExit("MainActivity import anchor not found")
           if "import android.view.InputDevice" not in a:
-              a = a.replace(bundle_import, bundle_import + nl + "import android.view.InputDevice" + nl + "import android.view.KeyEvent", 1)
+              a = a.replace(bundle_import, bundle_import + nl + "import android.view.InputDevice" + nl + "import android.view.KeyEvent" + nl + "import android.view.MotionEvent", 1)
           class_anchor = "class MainActivity : ComponentActivity() {"
           if class_anchor not in a: raise SystemExit("MainActivity class not found")
           if "private var mappingScreenActive" not in a:
               a = a.replace(class_anchor, class_anchor + nl + "    @Volatile private var mappingScreenActive = false", 1)
           create_anchor = "    override fun onCreate(savedInstanceState: Bundle?) {"
-          if ("import android.view.MotionEvent" not in a):
-              a = a.replace(bundle_import, bundle_import + nl + "import android.view.MotionEvent", 1)
-          dispatch = ("    private fun isPhysicalGamepad(deviceId: Int): Boolean {" + nl +
-              "        val sources = InputDevice.getDevice(deviceId)?.sources ?: return false" + nl +
-              "        return (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD || (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK" + nl +
-              "    }" + nl + nl +
-              "    override fun dispatchKeyEvent(event: KeyEvent): Boolean {" + nl +
-              "        if (mappingScreenActive && event.keyCode != KeyEvent.KEYCODE_BACK && isPhysicalGamepad(event.deviceId)) return true" + nl +
+          dispatch = ("    override fun dispatchKeyEvent(event: KeyEvent): Boolean {" + nl +
+              "        if (mappingScreenActive && event.keyCode != KeyEvent.KEYCODE_BACK && (event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK))) return true" + nl +
               "        return super.dispatchKeyEvent(event)" + nl + "    }" + nl + nl +
               "    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {" + nl +
-              "        if (mappingScreenActive && isPhysicalGamepad(event.deviceId) && (event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK))) return true" + nl +
+              "        if (mappingScreenActive && (event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK))) return true" + nl +
               "        return super.dispatchGenericMotionEvent(event)" + nl + "    }" + nl + nl)
           if create_anchor not in a: raise SystemExit("MainActivity onCreate anchor not found")
           if "override fun dispatchKeyEvent(event: KeyEvent)" not in a:
@@ -169,7 +189,6 @@ jobs:
           ! grep -q 'Trocar dispositivo' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'override fun dispatchKeyEvent(event: KeyEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'override fun dispatchGenericMotionEvent(event: MotionEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
-          grep -q 'isPhysicalGamepad(event.deviceId)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'mappingScreenActive = true' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
       - name: Set app version
         run: |
