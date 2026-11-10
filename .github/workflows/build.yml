@@ -107,14 +107,15 @@ jobs:
               s = s.replace(handler_state, handler_state + nl + handler, 1)
           if "SystemClock.elapsedRealtime()" not in s: raise SystemExit("Double-back handler insertion failed")
 
-          # Remove the complete button containing the switch-controller label.
+          # Remove the remaining label safely. The baseline has no standard Button
+          # wrapper around this text, so remove the whole Text call by balancing
+          # parentheses; do not fail just because its parent is a custom layout.
           import re
-          label = re.search(r'Text\s*\(\s*"Trocar dispositivo"\s*\)', s)
+          label = re.search(r'Text\\s*\\(\\s*text\\s*=\\s*"Trocar dispositivo"', s)
+          if label is None:
+              label = re.search(r'Text\\s*\\(\\s*"Trocar dispositivo"', s)
           if label:
-              candidates = list(re.finditer(r'\b(?:TextButton|Button|OutlinedButton|ElevatedButton)\s*\(', s[:label.start()]))
-              if not candidates: raise SystemExit("Could not locate the Trocar dispositivo button")
-              start = candidates[-1].start()
-              opening = s.find("(", candidates[-1].start())
+              opening = s.find("(", label.start())
               depth = 0
               in_string = False
               escaped = False
@@ -123,7 +124,7 @@ jobs:
                   ch = s[i]
                   if in_string:
                       if escaped: escaped = False
-                      elif ch == "\\": escaped = True
+                      elif ch == "\\\\": escaped = True
                       elif ch == '"': in_string = False
                       continue
                   if ch == '"': in_string = True
@@ -133,29 +134,9 @@ jobs:
                       if depth == 0:
                           close = i
                           break
-              if close < 0: raise SystemExit("Could not parse button parameters")
-              end = close + 1
-              while end < len(s) and s[end].isspace(): end += 1
-              if end < len(s) and s[end] == "{":
-                  depth = 0
-                  in_string = False
-                  escaped = False
-                  for i in range(end, len(s)):
-                      ch = s[i]
-                      if in_string:
-                          if escaped: escaped = False
-                          elif ch == "\\": escaped = True
-                          elif ch == '"': in_string = False
-                          continue
-                      if ch == '"': in_string = True
-                      elif ch == "{": depth += 1
-                      elif ch == "}":
-                          depth -= 1
-                          if depth == 0:
-                              end = i + 1
-                              break
-              s = s[:start] + s[end:]
-          if "Trocar dispositivo" in s: raise SystemExit("Control-switch button label still exists")
+              if close < 0: raise SystemExit("Could not parse switch-controller Text")
+              s = s[:label.start()] + s[close + 1:]
+          if "Trocar dispositivo" in s: raise SystemExit("Control-switch label still exists")
           mapping.write_text(s)
 
           activity = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
