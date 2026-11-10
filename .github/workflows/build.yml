@@ -107,55 +107,18 @@ jobs:
               s = s.replace(handler_state, handler_state + nl + handler, 1)
           if "SystemClock.elapsedRealtime()" not in s: raise SystemExit("Double-back handler insertion failed")
 
-          # Remove the complete button containing the switch-controller label.
-          import re
-          label = re.search(r'Text\s*\(\s*"Trocar dispositivo"\s*\)', s)
-          if label:
-              candidates = list(re.finditer(r'\b(?:TextButton|Button|OutlinedButton|ElevatedButton)\s*\(', s[:label.start()]))
-              if not candidates: raise SystemExit("Could not locate the Trocar dispositivo button")
-              start = candidates[-1].start()
-              opening = s.find("(", candidates[-1].start())
-              depth = 0
-              in_string = False
-              escaped = False
-              close = -1
-              for i in range(opening, len(s)):
-                  ch = s[i]
-                  if in_string:
-                      if escaped: escaped = False
-                      elif ch == "\\": escaped = True
-                      elif ch == '"': in_string = False
-                      continue
-                  if ch == '"': in_string = True
-                  elif ch == "(": depth += 1
-                  elif ch == ")":
-                      depth -= 1
-                      if depth == 0:
-                          close = i
-                          break
-              if close < 0: raise SystemExit("Could not parse button parameters")
-              end = close + 1
-              while end < len(s) and s[end].isspace(): end += 1
-              if end < len(s) and s[end] == "{":
-                  depth = 0
-                  in_string = False
-                  escaped = False
-                  for i in range(end, len(s)):
-                      ch = s[i]
-                      if in_string:
-                          if escaped: escaped = False
-                          elif ch == "\\": escaped = True
-                          elif ch == '"': in_string = False
-                          continue
-                      if ch == '"': in_string = True
-                      elif ch == "{": depth += 1
-                      elif ch == "}":
-                          depth -= 1
-                          if depth == 0:
-                              end = i + 1
-                              break
-              s = s[:start] + s[end:]
-          if "Trocar dispositivo" in s: raise SystemExit("Control-switch button label still exists")
+          # Remove the exact obsolete row from the verified Beta 2 source.
+          obsolete_row = (
+              "        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {" + nl +
+              "            TextButton(onClick = onBack) { Text(\"Trocar dispositivo\") }" + nl +
+              "        }" + nl
+          )
+          if obsolete_row in s:
+              s = s.replace(obsolete_row, "", 1)
+          elif "Trocar dispositivo" in s:
+              raise SystemExit("Obsolete switch row has an unexpected structure; inspect source before patching")
+          if "Trocar dispositivo" in s:
+              raise SystemExit("Control-switch label still exists after exact row removal")
           mapping.write_text(s)
 
           activity = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
