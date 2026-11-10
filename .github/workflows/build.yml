@@ -107,35 +107,9 @@ jobs:
               s = s.replace(handler_state, handler_state + nl + handler, 1)
           if "SystemClock.elapsedRealtime()" not in s: raise SystemExit("Double-back handler insertion failed")
 
-          # Remove the remaining label safely. The baseline has no standard Button
-          # wrapper around this text, so remove the whole Text call by balancing
-          # parentheses; do not fail just because its parent is a custom layout.
+          # Remove the obsolete label, whether Text uses positional or named text.
           import re
-          label = re.search(r'Text\\s*\\(\\s*text\\s*=\\s*"Trocar dispositivo"', s)
-          if label is None:
-              label = re.search(r'Text\\s*\\(\\s*"Trocar dispositivo"', s)
-          if label:
-              opening = s.find("(", label.start())
-              depth = 0
-              in_string = False
-              escaped = False
-              close = -1
-              for i in range(opening, len(s)):
-                  ch = s[i]
-                  if in_string:
-                      if escaped: escaped = False
-                      elif ch == "\\\\": escaped = True
-                      elif ch == '"': in_string = False
-                      continue
-                  if ch == '"': in_string = True
-                  elif ch == "(": depth += 1
-                  elif ch == ")":
-                      depth -= 1
-                      if depth == 0:
-                          close = i
-                          break
-              if close < 0: raise SystemExit("Could not parse switch-controller Text")
-              s = s[:label.start()] + s[close + 1:]
+          s = re.sub(r'Text\s*\(\s*(?:text\s*=\s*)?"Trocar dispositivo"\s*\)', '', s)
           if "Trocar dispositivo" in s: raise SystemExit("Control-switch label still exists")
           mapping.write_text(s)
 
