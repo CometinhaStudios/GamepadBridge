@@ -81,23 +81,14 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           p = Path("app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt")
           s = p.read_text()
-          old = """    BackHandler {
-          val now = SystemClock.elapsedRealtime()
-          if (now - lastBackAt < 900L) onDone()
-          else {
-              lastBackAt = now
-              Toast.makeText(context, "Aperte Voltar novamente para sair do mapeamento", Toast.LENGTH_SHORT).show()
-          }
-      }"""
-          new = """    BackHandler(enabled = true) {
-          // Bloqueia o botão físico Back durante o mapeamento.
-      }"""
-          if old not in s:
-              raise SystemExit("Expected BackHandler block not found; refusing to patch")
-          s = s.replace(old, new, 1)
+          pattern = r"(?ms)^    BackHandler \\{\\n.*?^    \\}"
+          s, count = re.subn(pattern, "    BackHandler(enabled = true) { }", s, count=1)
+          if count != 1:
+              raise SystemExit("Mapping BackHandler not found; refusing to patch")
           p.write_text(s)
           PY
           grep -q 'BackHandler(enabled = true)' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
