@@ -81,25 +81,14 @@ jobs:
 
           p = Path("app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt")
           s = p.read_text()
-          import re
-          start_pattern = re.compile(r'(?m)^(\s*)val token = generation\.incrementAndGet\(\)\n\s*synchronized\(axisRestValue\) \{ axisRestValue\.clear\(\) \}\n\s*thread\(name = "calibration-capture"\) \{')
-          start_match = start_pattern.search(s)
-          assert start_match, "Calibration start block not found"
-          indent = start_match.group(1)
-          start_replacement = (
-              indent + "val token = generation.incrementAndGet()\\n" +
-              indent + "val initialRanges = DeviceNodeReader.getAxisRanges(node)\\n" +
-              indent + "synchronized(axisRestValue) {\\n" +
-              indent + "    axisRestValue.clear()\\n" +
-              indent + "    initialRanges.forEach { (code, range) -> axisRestValue[code] = range.current }\\n" +
-              indent + "}\\n" +
-              indent + 'thread(name = "calibration-capture") {'
-          )
-          s = start_pattern.sub(lambda _: start_replacement, s, count=1)
-          old = """                            val rest = synchronized(axisRestValue) {
-                                              axisRestValue.getOrPut(line.code) { raw }
+          old = """                            val range = DeviceNodeReader.getAxisRanges(node)[line.code]
+                                          val rest = synchronized(axisRestValue) {
+                                              axisRestValue.getOrPut(line.code) { range?.current ?: raw }
                                           }
-                                          if (abs(raw.toLong() - rest.toLong()) > 45L) {"""
+                                          val threshold = range?.let {
+                                              maxOf(2L, (it.max.toLong() - it.min.toLong()) / 16L)
+                                          } ?: 45L
+                                          if (abs(raw.toLong() - rest.toLong()) > threshold) {"""
           new = """                            val range = initialRanges[line.code]
                                           val rest = synchronized(axisRestValue) {
                                               axisRestValue.getOrPut(line.code) { range?.current ?: raw }
@@ -112,7 +101,6 @@ jobs:
           p.write_text(s.replace(old, new, 1))
           PY
           grep -q 'val current: Int' app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt
-          grep -q 'initialRanges.forEach' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
           grep -q 'val threshold = range?.let' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
       - name: Set app version
         run: |
