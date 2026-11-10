@@ -213,10 +213,28 @@ Java_com_gamepadbridge_app_inject_UInputNative_create(JNIEnv*, jclass) {
 fail:
     LOGE("uinput setup failed: %s",strerror(errno)); close(fd); return JNI_FALSE;
 }
+static bool dpad_up=false, dpad_down=false, dpad_left=false, dpad_right=false;
 extern "C" JNIEXPORT void JNICALL
 Java_com_gamepadbridge_app_inject_UInputNative_sendKey(JNIEnv*,jclass,jint androidKey,jboolean down){
     int k=keycode(androidKey); if(k==0) return;
-    if(emit(EV_KEY,k,down?1:0)==0) emit_sync();
+    const bool pressed = down == JNI_TRUE;
+    if(androidKey>=19 && androidKey<=22){
+        if(androidKey==19) dpad_up=pressed;
+        if(androidKey==20) dpad_down=pressed;
+        if(androidKey==21) dpad_left=pressed;
+        if(androidKey==22) dpad_right=pressed;
+        emit(EV_KEY,k,pressed?1:0);
+        emit(EV_ABS,ABS_HAT0X,(dpad_right?1:0)-(dpad_left?1:0));
+        emit(EV_ABS,ABS_HAT0Y,(dpad_down?1:0)-(dpad_up?1:0));
+        emit_sync();
+        return;
+    }
+    emit(EV_KEY,k,pressed?1:0);
+    if(androidKey==104 || androidKey==105){
+        const int triggerAxis = androidKey==104 ? ABS_Z : ABS_RZ;
+        emit(EV_ABS,triggerAxis,pressed?255:0);
+    }
+    emit_sync();
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_gamepadbridge_app_inject_UInputNative_sendAxis(JNIEnv*,jclass,jint androidAxis,jfloat value){
@@ -291,4 +309,158 @@ else:
         g = g.replace("defaultConfig {", """defaultConfig {
         ndk { abiFilters "arm64-v8a", "armeabi-v7a", "x86_64" }""", 1)
 gradle.write_text(g)
+
+# Improve trigger and D-pad compatibility, and add persistent analog dead-zone settings.
+settings_store = java / "data/AnalogSettingsStore.kt"
+settings_store.write_text("""package com.gamepadbridge.app.data
+
+import android.content.Context
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
+private val Context.analogSettingsDataStore by preferencesDataStore(name = "gamepad_bridge_settings")
+
+data class AnalogSettings(val deadZone: Float = 0.06f)
+
+class AnalogSettingsStore(context: Context) {
+    private val appContext = context.applicationContext
+    val settingsFlow: Flow<AnalogSettings> = appContext.analogSettingsDataStore.data.map { prefs ->
+        AnalogSettings((prefs[DEAD_ZONE] ?: 0.06f).coerceIn(0f, 0.30f))
+    }
+
+    suspend fun setDeadZone(value: Float) {
+        appContext.analogSettingsDataStore.edit { prefs ->
+            prefs[DEAD_ZONE] = value.coerceIn(0f, 0.30f)
+        }
+    }
+
+    companion object {
+        private val DEAD_ZONE = floatPreferencesKey("analog_dead_zone")
+    }
+}
+""")
+
+settings_screen = java / "ui/AnalogSettingsScreen.kt"
+settings_screen.write_text("""package com.gamepadbridge.app.ui
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.gamepadbridge.app.data.AnalogSettings
+import com.gamepadbridge.app.data.AnalogSettingsStore
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+@Composable
+fun AnalogSettingsScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val store = remember { AnalogSettingsStore(context) }
+    val settings by store.settingsFlow.collectAsState(initial = AnalogSettings())
+    var deadZone by remember { mutableFloatStateOf(settings.deadZone) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(settings.deadZone) { deadZone = settings.deadZone }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+        TextButton(onClick = onBack) { Text("Voltar") }
+        Text("Configurações", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(18.dp))
+        Text("Precisão dos analógicos", style = MaterialTheme.typography.titleMedium)
+        Text("Zona morta: \${(deadZone * 100f).roundToInt()}%", style = MaterialTheme.typography.titleLarge)
+        Slider(
+            value = deadZone,
+            onValueChange = { deadZone = it },
+            valueRange = 0f..0.30f,
+            steps = 29,
+            onValueChangeFinished = { scope.launch { store.setDeadZone(deadZone) } }
+        )
+        Text(
+            "Menor valor = resposta mais sensível. Aumente a zona morta se o analógico se mover sozinho. A configuração é salva automaticamente.",
+            style = MaterialTheme.typography.bodySmall
+        )
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = { deadZone = 0.06f; scope.launch { store.setDeadZone(0.06f) } },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Restaurar padrão (6%)") }
+    }
+}
+""")
+
+main_activity = java / "MainActivity.kt"
+main = main_activity.read_text()
+if "AnalogSettingsScreen" not in main:
+    import_line = "import com.gamepadbridge.app.ui.ControllerTestScreen"
+    if import_line not in main:
+        raise SystemExit("MainActivity import anchor missing")
+    main = main.replace(import_line, import_line + "\nimport com.gamepadbridge.app.ui.AnalogSettingsScreen")
+    home_call = 'onProfiles = { nav.navigate("profiles") },'
+    if home_call not in main:
+        raise SystemExit("HomeScreen profiles navigation anchor missing")
+    main = main.replace(home_call, home_call + '\n                            onSettings = { nav.navigate("settings") },', 1)
+    route_anchor = 'composable("test") { ControllerTestScreen { nav.popBackStack("home", false) } }'
+    if route_anchor not in main:
+        raise SystemExit("MainActivity test route anchor missing")
+    main = main.replace(route_anchor, route_anchor + '\n                    composable("settings") { AnalogSettingsScreen { nav.popBackStack("home", false) } }', 1)
+    signature = "    onProfiles: () -> Unit,"
+    if signature not in main:
+        raise SystemExit("HomeScreen signature anchor missing")
+    main = main.replace(signature, signature + "\n    onSettings: () -> Unit,", 1)
+    home_button_anchor = '            OutlinedButton(onClick = onTest, modifier = Modifier.fillMaxWidth()) { Text("Testar controle") }'
+    if home_button_anchor not in main:
+        raise SystemExit("HomeScreen test button anchor missing")
+    main = main.replace(home_button_anchor, home_button_anchor + '\n            OutlinedButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Configurações") }', 1)
+    main_activity.write_text(main)
+
+service = java / "service/GamepadBridgeService.kt"
+svc_text = service.read_text()
+if "AnalogSettingsStore" not in svc_text:
+    svc_text = svc_text.replace(
+        "import com.gamepadbridge.app.data.ControllerProfile",
+        "import com.gamepadbridge.app.data.AnalogSettingsStore\nimport com.gamepadbridge.app.data.ControllerProfile"
+    )
+    svc_text = svc_text.replace(
+        "import kotlinx.coroutines.flow.first",
+        "import kotlinx.coroutines.flow.first\nimport kotlinx.coroutines.flow.collect"
+    )
+    svc_text = svc_text.replace(
+        "    @Volatile private var running = false",
+        "    @Volatile private var running = false\n    @Volatile private var analogDeadZone = 0.06f"
+    )
+    svc_text = svc_text.replace(
+        "        val keyMap = HashMap<String, XboxInput>()",
+        """        scope.launch {
+            AnalogSettingsStore(applicationContext).settingsFlow.collect { analogDeadZone = it.deadZone }
+        }
+
+        val keyMap = HashMap<String, XboxInput>()"""
+    )
+    svc_text = svc_text.replace(
+        "                    synchronized(axisValues) { axisValues[axis] = directed }",
+        """                    val adjusted = if (isTrigger) directed else applyDeadZone(directed, analogDeadZone)
+                    synchronized(axisValues) { axisValues[axis] = adjusted }"""
+    )
+    helper_anchor = "    private fun parseRawValue(value: String): Int? = runCatching {"
+    helper = """    private fun applyDeadZone(value: Float, deadZone: Float): Float {
+        val magnitude = kotlin.math.abs(value)
+        if (magnitude <= deadZone) return 0f
+        val scaled = ((magnitude - deadZone) / (1f - deadZone)).coerceIn(0f, 1f)
+        return kotlin.math.sign(value) * scaled
+    }
+
+"""
+    if helper_anchor not in svc_text:
+        raise SystemExit("Service dead-zone helper anchor missing")
+    svc_text = svc_text.replace(helper_anchor, helper + helper_anchor, 1)
+    service.write_text(svc_text)
+
+print("Applied trigger/D-pad fixes and analog settings.")
+
 print("UInput virtual Xbox 360 integration applied")
