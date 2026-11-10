@@ -170,7 +170,7 @@ jobs:
               a = a.replace(class_anchor, class_anchor + nl + "    @Volatile private var mappingScreenActive = false", 1)
           create_anchor = "    override fun onCreate(savedInstanceState: Bundle?) {"
           if ("import android.view.MotionEvent" not in a):
-              a = a.replace(bundle_import, bundle_import + nl + "import android.view.InputDevice" + nl + "import android.view.KeyEvent" + nl + "import android.view.MotionEvent", 1)
+              a = a.replace(bundle_import, bundle_import + nl + "import android.view.MotionEvent", 1)
           dispatch = ("    private fun isPhysicalGamepad(deviceId: Int): Boolean {" + nl +
               "        val sources = InputDevice.getDevice(deviceId)?.sources ?: return false" + nl +
               "        return (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD || (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK" + nl +
@@ -228,7 +228,7 @@ jobs:
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
           sha256sum "$APK"
-      - name: Upload v1.11 APK
+      - name: Upload v1.12 APK
         uses: actions/upload-artifact@v4
         with:
           name: GamepadBridge-v1.12
