@@ -180,7 +180,7 @@ static int emit(uint16_t type, uint16_t code, int32_t value) {
     if (write(g_fd, &e, sizeof(e)) != (ssize_t)sizeof(e)) return -1;
     return 0;
 }
-static void sync() { emit(EV_SYN, SYN_REPORT, 0); }
+static void emit_sync() { emit(EV_SYN, SYN_REPORT, 0); }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_gamepadbridge_app_inject_UInputNative_canOpen(JNIEnv*, jclass) {
     int fd=open("/dev/uinput", O_WRONLY|O_NONBLOCK);
@@ -192,10 +192,10 @@ Java_com_gamepadbridge_app_inject_UInputNative_create(JNIEnv*, jclass) {
     if(g_fd>=0){ ioctl(g_fd, UI_DEV_DESTROY); close(g_fd); g_fd=-1; }
     int fd=open("/dev/uinput", O_WRONLY|O_NONBLOCK);
     if(fd<0){ LOGE("open /dev/uinput for create: %s", strerror(errno)); return JNI_FALSE; }
-    if(ioctl(fd, UI_SET_EVBIT, EV_KEY)<0 || ioctl(fd, UI_SET_EVBIT, EV_ABS)<0 || ioctl(fd, UI_SET_EVBIT, EV_SYN)<0) goto fail;
     const int keys[]={BTN_A,BTN_B,BTN_X,BTN_Y,BTN_TL,BTN_TR,BTN_TL2,BTN_TR2,BTN_START,BTN_SELECT,BTN_MODE,BTN_THUMBL,BTN_THUMBR,KEY_UP,KEY_DOWN,KEY_LEFT,KEY_RIGHT};
-    for(int k:keys) if(ioctl(fd,UI_SET_KEYBIT,k)<0) goto fail;
     const int axes[]={ABS_X,ABS_Y,ABS_RX,ABS_RY,ABS_Z,ABS_RZ,ABS_HAT0X,ABS_HAT0Y};
+    if(ioctl(fd, UI_SET_EVBIT, EV_KEY)<0 || ioctl(fd, UI_SET_EVBIT, EV_ABS)<0 || ioctl(fd, UI_SET_EVBIT, EV_SYN)<0) goto fail;
+    for(int k:keys) if(ioctl(fd,UI_SET_KEYBIT,k)<0) goto fail;
     for(int a:axes){
         if(ioctl(fd,UI_SET_ABSBIT,a)<0) goto fail;
         uinput_abs_setup s{}; s.code=a;
@@ -216,7 +216,7 @@ fail:
 extern "C" JNIEXPORT void JNICALL
 Java_com_gamepadbridge_app_inject_UInputNative_sendKey(JNIEnv*,jclass,jint androidKey,jboolean down){
     int k=keycode(androidKey); if(k==0) return;
-    if(emit(EV_KEY,k,down?1:0)==0) sync();
+    if(emit(EV_KEY,k,down?1:0)==0) emit_sync();
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_gamepadbridge_app_inject_UInputNative_sendAxis(JNIEnv*,jclass,jint androidAxis,jfloat value){
