@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.8 (analog capture fix)
+    name: Build GamepadBridge v1.9 (mapping navigation fix)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -77,36 +77,56 @@ jobs:
           grep -q 'maxOf(45L' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
           grep -q 'delta >= threshold' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
           grep -q 'delta <= -threshold' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
-      - name: Keep system Back from leaving mapping accidentally
+      - name: Fix mapping navigation and isolate controller keys
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          p = Path("app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt")
-          s = p.read_text()
           nl = chr(10)
+          mapping = Path("app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt")
+          s = mapping.read_text()
           import_anchor = "import androidx.compose.foundation.layout.*"
-          if import_anchor not in s:
-              raise SystemExit("MappingScreen imports not found")
+          if import_anchor not in s: raise SystemExit("MappingScreen imports not found")
           if "import androidx.activity.compose.BackHandler" not in s:
               s = s.replace(import_anchor, "import androidx.activity.compose.BackHandler" + nl + import_anchor, 1)
-          function_start = s.find("fun MappingScreen(")
-          if function_start < 0:
-              raise SystemExit("MappingScreen composable not found")
-          body_start = s.find(") {", function_start)
-          if body_start < 0:
-              raise SystemExit("MappingScreen body not found")
-          insertion = body_start + len(") {")
-          if "BackHandler(enabled = true) { }" not in s:
-              s = s[:insertion] + nl + "    BackHandler(enabled = true) { }" + s[insertion:]
-          p.write_text(s)
+          selected_anchor = "    var selectedDevice by remember { mutableStateOf<DeviceNodeReader.DeviceEntry?>(null) }"
+          if selected_anchor not in s: raise SystemExit("selectedDevice state not found")
+          s = s.replace("    BackHandler(enabled = true) { }", "", 1)
+          handler = "    BackHandler(enabled = true) { if (selectedDevice != null) selectedDevice = null else onDone() }"
+          if handler not in s: s = s.replace(selected_anchor, selected_anchor + nl + handler, 1)
+          if handler not in s: raise SystemExit("Functional mapping BackHandler insertion failed")
+          mapping.write_text(s)
+
+          activity = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
+          a = activity.read_text()
+          bundle_import = "import android.os.Bundle"
+          if bundle_import not in a: raise SystemExit("MainActivity import anchor not found")
+          if "import android.view.InputDevice" not in a:
+              a = a.replace(bundle_import, bundle_import + nl + "import android.view.InputDevice" + nl + "import android.view.KeyEvent", 1)
+          class_anchor = "class MainActivity : ComponentActivity() {"
+          if class_anchor not in a: raise SystemExit("MainActivity class not found")
+          if "private var mappingScreenActive" not in a:
+              a = a.replace(class_anchor, class_anchor + nl + "    @Volatile private var mappingScreenActive = false", 1)
+          create_anchor = "    override fun onCreate(savedInstanceState: Bundle?) {"
+          dispatch = "    override fun dispatchKeyEvent(event: KeyEvent): Boolean {" + nl +
+              "        if (mappingScreenActive && (event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK))) return true" + nl +
+              "        return super.dispatchKeyEvent(event)" + nl + "    }" + nl + nl
+          if create_anchor not in a: raise SystemExit("MainActivity onCreate anchor not found")
+          if "override fun dispatchKeyEvent(event: KeyEvent)" not in a:
+              a = a.replace(create_anchor, dispatch + create_anchor, 1)
+          route_anchor = '                    composable("mapping/{profileId}") { entry ->'
+          route_effect = route_anchor + nl + "                        DisposableEffect(Unit) { mappingScreenActive = true; onDispose { mappingScreenActive = false } }"
+          if route_anchor not in a: raise SystemExit("Mapping navigation route not found")
+          if "mappingScreenActive = true" not in a: a = a.replace(route_anchor, route_effect, 1)
+          activity.write_text(a)
           PY
-          grep -q 'import androidx.activity.compose.BackHandler' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-          grep -q 'BackHandler(enabled = true) { }' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          grep -q 'BackHandler(enabled = true) { if (selectedDevice != null) selectedDevice = null else onDone() }' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          grep -q 'override fun dispatchKeyEvent(event: KeyEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+          grep -q 'mappingScreenActive = true' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
       - name: Set app version
         run: |
-          sed -i 's/versionCode = 1/versionCode = 11/' app/build.gradle.kts
-          sed -i 's/versionName = "0.1"/versionName = "v1.8"/' app/build.gradle.kts
+          sed -i 's/versionCode = 1/versionCode = 12/' app/build.gradle.kts
+          sed -i 's/versionName = "0.1"/versionName = "v1.9"/' app/build.gradle.kts
           grep -q 'versionCode = 11' app/build.gradle.kts
           grep -q 'versionName = "v1.8"' app/build.gradle.kts
       - name: Configure persistent debug signing
@@ -125,10 +145,10 @@ jobs:
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
           sha256sum "$APK"
-      - name: Upload v1.8 APK
+      - name: Upload v1.9 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.8
+          name: GamepadBridge-v1.9
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
