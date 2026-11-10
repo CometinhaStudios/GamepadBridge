@@ -80,20 +80,12 @@ jobs:
               s = s.replace(needle, guard, 1)
               p.write_text(s)
           PY
-      - name: Inspect analog mapping event capture
+      - name: Inspect complete mapping input pipeline
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          for p in Path('app/src/main/java').rglob('*.kt'):
-              s=p.read_text(errors='ignore')
-              if 'MappingScreen' in s or 'onGenericMotionEvent' in s or 'AXIS_X' in s or 'MotionEvent' in s:
-                  print('\\n===== '+str(p)+' =====')
-                  lines=s.splitlines()
-                  for i,line in enumerate(lines):
-                      if any(k in line for k in ['MappingScreen','onGenericMotionEvent','AXIS_X','MotionEvent','onKeyEvent','InputDevice']):
-                          a=max(0,i-8); b=min(len(lines),i+18)
-                          print('\\n'.join(f'{j+1}: {lines[j]}' for j in range(a,b)))
-          PY
+          for f in app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt app/src/main/java/com/gamepadbridge/app/MainActivity.kt; do
+            echo "===== $f ====="
+            if [ -f "$f" ]; then nl -ba "$f"; else echo "FILE NOT FOUND"; fi
+          done
       - name: Set app version
         run: |
           sed -i 's/versionCode = 1/versionCode = 10/' app/build.gradle.kts
