@@ -130,7 +130,7 @@ object UInputBridge {
 project(gamepad_uinput)
 add_library(gamepad_uinput SHARED gamepad_uinput.cpp)
 find_library(log-lib log)
-target_link_libraries(gamepad_uinput \${log-lib})
+target_link_libraries(gamepad_uinput ${log-lib})
 target_compile_options(gamepad_uinput PRIVATE -Wall -Wextra)
 """)
 
