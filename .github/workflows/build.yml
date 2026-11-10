@@ -107,10 +107,9 @@ jobs:
           s = s.replace(
               '        synchronized(axisRestValue) { axisRestValue.clear() }',
               '''        val initialRanges = DeviceNodeReader.getAxisRanges(node)
-                  .also { ranges -> synchronized(axisRestValue) { axisRestValue.clear(); ranges.forEach { (code, range) -> axisRestValue[code] = range.current } } }
               synchronized(axisRestValue) {
                   axisRestValue.clear()
-                  axisRestValue.putAll(initialRanges)
+                  initialRanges.forEach { (code, range) -> axisRestValue[code] = range.current }
               }'''
           )
           s = s.replace(
@@ -120,12 +119,12 @@ jobs:
                             val threshold = maxOf(2L, span / 12L)
                             if (abs(raw.toLong() - rest.toLong()) > threshold) {'''
           )
-          if "axisRestValue.putAll(initialRanges)" not in s or "span / 12L" not in s:
+          if "initialRanges.forEach { (code, range) -> axisRestValue[code] = range.current }" not in s or "span / 12L" not in s:
               raise SystemExit("Could not patch calibration baseline safely")
           p.write_text(s)
           PY
           grep -q 'val current: Int' app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt
-          grep -q 'axisRestValue.putAll(initialRanges)' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
+          grep -q 'initialRanges.forEach' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
       - name: Set app version
         run: |
           sed -i 's/versionCode = 1/versionCode = 11/' app/build.gradle.kts
