@@ -14,7 +14,7 @@ jobs:
           mkdir -p /tmp/src
           tar -xJf source/GamepadBridge-source.tar.xz -C /tmp/src
           find /tmp/src/GamepadBridge/app/src/main/java/com/gamepadbridge/app -type f | sort
-          for f in $(find /tmp/src/GamepadBridge/app/src/main/java/com/gamepadbridge/app -type f | grep -E 'ShizukuBridge|CalibrationCapture|DeviceNodeReader|GamepadBridgeService|MappingScreen|ControllerProfile'); do
+          for f in $(find /tmp/src/GamepadBridge/app/src/main/java/com/gamepadbridge/app -type f | grep -E 'MainActivity|ShizukuBridge|CalibrationCapture|DeviceNodeReader|GamepadBridgeService|MappingScreen|ControllerProfile'); do
             echo "===== $f ====="
             sed -n '1,260p' "$f"
           done
