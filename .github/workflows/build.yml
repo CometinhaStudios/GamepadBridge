@@ -108,9 +108,9 @@ jobs:
           if "private var mappingScreenActive" not in a:
               a = a.replace(class_anchor, class_anchor + nl + "    @Volatile private var mappingScreenActive = false", 1)
           create_anchor = "    override fun onCreate(savedInstanceState: Bundle?) {"
-          dispatch = "    override fun dispatchKeyEvent(event: KeyEvent): Boolean {" + nl +
+          dispatch = ("    override fun dispatchKeyEvent(event: KeyEvent): Boolean {" + nl +
               "        if (mappingScreenActive && (event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK))) return true" + nl +
-              "        return super.dispatchKeyEvent(event)" + nl + "    }" + nl + nl
+              "        return super.dispatchKeyEvent(event)" + nl + "    }" + nl + nl)
           if create_anchor not in a: raise SystemExit("MainActivity onCreate anchor not found")
           if "override fun dispatchKeyEvent(event: KeyEvent)" not in a:
               a = a.replace(create_anchor, dispatch + create_anchor, 1)
