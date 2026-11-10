@@ -108,15 +108,25 @@ jobs:
               s = s.replace(handler_state, handler_state + nl + handler, 1)
           if "SystemClock.elapsedRealtime()" not in s: raise SystemExit("Double-back handler insertion failed")
 
-          # Remove the switch-device button and its one-line Row wrapper.
+          # Remove the exact button line, then remove its now-empty Row wrapper.
           lines = s.splitlines(keepends=True)
-          matches = [i for i, line in enumerate(lines) if 'TextButton(onClick = onBack) { Text("Trocar dispositivo") }' in line]
+          matches = [i for i, line in enumerate(lines) if "Trocar dispositivo" in line]
           if len(matches) != 1:
-              raise SystemExit(f"Expected exactly one switch-device button, found {len(matches)}")
+              raise SystemExit(f"Expected one switch-device label line, found {len(matches)}")
           i = matches[0]
-          if i == 0 or i + 1 >= len(lines) or "Row(" not in lines[i - 1] or lines[i + 1].strip() != "}":
-              raise SystemExit("Switch-device button wrapper differs from inspected source; refusing unsafe removal")
-          del lines[i - 1:i + 2]
+          if "TextButton" not in lines[i] or "onClick = onBack" not in lines[i]:
+              raise SystemExit("Switch-device label is not in the expected TextButton; refusing unsafe removal")
+          del lines[i]
+          # Find the surrounding Row and its closing brace, allowing harmless blank lines.
+          row_index = next((j for j in range(i - 1, max(-1, i - 5), -1) if "Row(" in lines[j]), None)
+          if row_index is None:
+              raise SystemExit("Could not locate the switch-device Row wrapper")
+          close_index = next((j for j in range(i, min(len(lines), i + 4)) if lines[j].strip() == "}"), None)
+          if close_index is None:
+              raise SystemExit("Could not locate the switch-device Row closing brace")
+          if any(line.strip() for line in lines[row_index + 1:close_index]):
+              raise SystemExit("Switch-device Row contains other content; refusing unsafe removal")
+          del lines[row_index:close_index + 1]
           s = "".join(lines)
           if "Trocar dispositivo" in s:
               raise SystemExit("Switch-device label remains in MappingScreen")
