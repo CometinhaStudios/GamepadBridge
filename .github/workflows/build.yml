@@ -77,21 +77,26 @@ jobs:
           grep -q 'maxOf(45L' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
           grep -q 'delta >= threshold' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
           grep -q 'delta <= -threshold' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
-      - name: Prevent controller Back button from closing mapping
+      - name: Keep system Back from leaving mapping accidentally
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           p = Path("app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt")
           s = p.read_text()
-          pattern = r"(?ms)^    BackHandler \\{\\n.*?^    \\}"
-          s, count = re.subn(pattern, "    BackHandler(enabled = true) { }", s, count=1)
-          if count != 1:
-              raise SystemExit("Mapping BackHandler not found; refusing to patch")
+          import_line = "import androidx.compose.runtime.*"
+          if import_line not in s:
+              raise SystemExit("Compose runtime import not found")
+          if "import androidx.activity.compose.BackHandler" not in s:
+              s = s.replace(import_line, "import androidx.activity.compose.BackHandler\\n" + import_line, 1)
+          anchor = ") {\\n    var devices by remember"
+          if anchor not in s:
+              raise SystemExit("MappingScreen function entry not found")
+          s = s.replace(anchor, ") {\\n    BackHandler(enabled = true) { }\\n    var devices by remember", 1)
           p.write_text(s)
           PY
-          grep -q 'BackHandler(enabled = true)' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          grep -q 'import androidx.activity.compose.BackHandler' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          grep -q 'BackHandler(enabled = true) { }' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
       - name: Set app version
         run: |
           sed -i 's/versionCode = 1/versionCode = 11/' app/build.gradle.kts
