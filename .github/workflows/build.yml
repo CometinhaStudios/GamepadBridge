@@ -84,15 +84,20 @@ jobs:
 
           p = Path("app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt")
           s = p.read_text()
-          import_line = "import androidx.compose.runtime.*"
-          if import_line not in s:
-              raise SystemExit("Compose runtime import not found")
+          import_anchor = "import androidx.compose.foundation.layout.*"
+          if import_anchor not in s:
+              raise SystemExit("MappingScreen imports not found")
           if "import androidx.activity.compose.BackHandler" not in s:
-              s = s.replace(import_line, "import androidx.activity.compose.BackHandler\\n" + import_line, 1)
-          anchor = ") {\\n    var devices by remember"
-          if anchor not in s:
-              raise SystemExit("MappingScreen function entry not found")
-          s = s.replace(anchor, ") {\\n    BackHandler(enabled = true) { }\\n    var devices by remember", 1)
+              s = s.replace(import_anchor, "import androidx.activity.compose.BackHandler\\n" + import_anchor, 1)
+          function_start = s.find("fun MappingScreen(")
+          if function_start < 0:
+              raise SystemExit("MappingScreen composable not found")
+          body_start = s.find(") {", function_start)
+          if body_start < 0:
+              raise SystemExit("MappingScreen body not found")
+          insertion = body_start + len(") {")
+          if "BackHandler(enabled = true) { }" not in s:
+              s = s[:insertion] + "\\n    BackHandler(enabled = true) { }" + s[insertion:]
           p.write_text(s)
           PY
           grep -q 'import androidx.activity.compose.BackHandler' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
