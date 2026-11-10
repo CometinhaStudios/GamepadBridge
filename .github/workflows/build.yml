@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.4
+    name: Build GamepadBridge v1.5
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -47,6 +47,13 @@ jobs:
         run: |
           python3 scripts/apply-v14.py
           cp -a patches/fix-v14/. .
+      - name: Add native virtual Xbox 360 controller through Shizuku UInput
+        run: |
+          python3 scripts/apply-uinput.py
+      - name: Install Android NDK and CMake
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
       - name: Block external controller keys from Android navigation during mapping
         run: |
           python3 - <<'PY'
@@ -95,10 +102,10 @@ jobs:
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
           sha256sum "$APK"
-      - name: Upload v1.4 APK
+      - name: Upload v1.5 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.4
+          name: GamepadBridge-v1.5
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
