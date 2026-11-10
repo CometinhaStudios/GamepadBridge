@@ -62,7 +62,7 @@ jobs:
           p = Path("app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt")
           s = p.read_text()
           old_threshold = "val threshold = if (isHat) 0L else maxOf(45L, ((range?.max?.toLong() ?: 32767L) - (range?.min?.toLong() ?: -32768L)) / 12L)"
-          new_threshold = "val threshold = if (isHat) 0L else maxOf(1L, ((range?.max?.toLong() ?: 1L) - (range?.min?.toLong() ?: 0L)) / 32L)"
+          new_threshold = "val threshold = if (isHat) 0L else maxOf(45L, ((range?.max?.toLong() ?: 32767L) - (range?.min?.toLong() ?: -32768L)) / 32L)"
           if old_threshold not in s:
               raise SystemExit("Stable threshold line not found; refusing to patch an unexpected source")
           s = s.replace(old_threshold, new_threshold, 1)
@@ -77,6 +77,24 @@ jobs:
           grep -q 'maxOf(1L' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
           grep -q 'delta >= threshold' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
           grep -q 'delta <= -threshold' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
+      - name: Prevent controller Back button from closing mapping
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path("app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt")
+          s = p.read_text()
+          pattern = re.compile(r'''    BackHandler \{\n        val now = SystemClock.elapsedRealtime\(\)\n        if \(now - lastBackAt < 900L\) onDone\(\)\n        else \{\n            lastBackAt = now\n            Toast.makeText\(context, "Aperte Voltar novamente para sair do mapeamento", Toast.LENGTH_SHORT\).show\(\)\n        \}\n    \}''')
+          replacement = '''    BackHandler(enabled = true) {
+          // Botões físicos mapeados como Back não podem encerrar a calibração.
+    }'''
+          s, count = pattern.subn(replacement, s, count=1)
+          if count != 1:
+              raise SystemExit("Expected mapping BackHandler block not found; refusing to patch")
+          p.write_text(s)
+          PY
+          grep -q 'BackHandler(enabled = true)' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
       - name: Set app version
         run: |
           sed -i 's/versionCode = 1/versionCode = 11/' app/build.gradle.kts
