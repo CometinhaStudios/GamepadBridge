@@ -54,77 +54,14 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: 'ndk;27.2.12479018 cmake;3.22.1'
-      - name: Block external controller keys from Android navigation during mapping
+      - name: Inspect complete mapping input pipeline
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
-          s = p.read_text()
-          marker = "        // GamepadBridge: external controller keys are captured from /dev/input during mapping."
-          if marker not in s:
-              needle = "    override fun dispatchKeyEvent(event: KeyEvent): Boolean {"
-              if needle not in s:
-                  raise SystemExit("dispatchKeyEvent not found; refusing to build without the mapping safety guard.")
-              guard = """    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-                  // GamepadBridge: external controller keys are captured from /dev/input during mapping.
-                  // Some pads report ordinary buttons as BACK/MODE or with a keyboard source.
-                  val controllerSources = InputDevice.SOURCE_GAMEPAD or InputDevice.SOURCE_JOYSTICK or InputDevice.SOURCE_DPAD
-                  val eventDevice = InputDevice.getDevice(event.deviceId)
-                  val isExternalController = event.deviceId > 0 && (
-                      (event.source and controllerSources) != 0 ||
-                      ((eventDevice?.sources ?: 0) and controllerSources) != 0 ||
-                      event.keyCode == KeyEvent.KEYCODE_BACK
-                  )
-                  if (mappingActive && isExternalController) return true
-          """
-              s = s.replace(needle, guard, 1)
-              p.write_text(s)
-          PY
-      - name: Fix analog calibration baseline detection
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt")
-          s = p.read_text()
-          s = s.replace(
-              "data class AxisRange(val min: Int, val max: Int) {",
-              "data class AxisRange(val min: Int, val max: Int, val current: Int) {"
-          )
-          s = s.replace(
-              'val regex = Regex("""(ABS_[A-Z0-9_]+)\\s*:\\s*value\\s+-?\\d+,\\s*min\\s+(-?\\d+),\\s*max\\s+(-?\\d+)""")',
-              'val regex = Regex("""(ABS_[A-Z0-9_]+)\\s*:\\s*value\\s+(-?\\d+),\\s*min\\s+(-?\\d+),\\s*max\\s+(-?\\d+)""")'
-          )
-          s = s.replace(
-              'val min = match.groupValues[2].toIntOrNull() ?: return@forEach\n            val max = match.groupValues[3].toIntOrNull() ?: return@forEach\n            if (max > min) result[match.groupValues[1]] = AxisRange(min, max)',
-              'val current = match.groupValues[2].toIntOrNull() ?: return@forEach\n            val min = match.groupValues[3].toIntOrNull() ?: return@forEach\n            val max = match.groupValues[4].toIntOrNull() ?: return@forEach\n            if (max > min) result[match.groupValues[1]] = AxisRange(min, max, current)'
-          )
-          if "val current = match.groupValues[2]" not in s:
-              raise SystemExit("Could not patch axis range parser safely")
-          p.write_text(s)
-
-          p = Path("app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt")
-          s = p.read_text()
-          s = s.replace(
-              '        synchronized(axisRestValue) { axisRestValue.clear() }',
-              '''        val initialRanges = DeviceNodeReader.getAxisRanges(node)
-              synchronized(axisRestValue) {
-                  axisRestValue.clear()
-                  initialRanges.forEach { (code, range) -> axisRestValue[code] = range.current }
-              }'''
-          )
-          s = s.replace(
-              '                            if (abs(raw.toLong() - rest.toLong()) > 45L) {',
-              '''                            val span = initialRanges[line.code]
-                                ?.let { (it.max - it.min).toLong() } ?: 0L
-                            val threshold = maxOf(2L, span / 12L)
-                            if (abs(raw.toLong() - rest.toLong()) > threshold) {'''
-          )
-          if "initialRanges.forEach { (code, range) -> axisRestValue[code] = range.current }" not in s or "span / 12L" not in s:
-              raise SystemExit("Could not patch calibration baseline safely")
-          p.write_text(s)
-          PY
-          grep -q 'val current: Int' app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt
-          grep -q 'initialRanges.forEach' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
+          echo "===== SOURCE FILE INVENTORY ====="
+          find app/src/main/java -type f -name '*.kt' -print
+          for f in app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt app/src/main/java/com/gamepadbridge/app/MainActivity.kt; do
+            echo "===== $f ====="
+            if [ -f "$f" ]; then nl -ba "$f"; else echo "FILE NOT FOUND"; fi
+          done
       - name: Set app version
         run: |
           sed -i 's/versionCode = 1/versionCode = 11/' app/build.gradle.kts
