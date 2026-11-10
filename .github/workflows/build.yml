@@ -82,8 +82,8 @@ jobs:
           PY
       - name: Set app version
         run: |
-          sed -i 's/versionCode = 1/versionCode = 7/' app/build.gradle.kts
-          sed -i 's/versionName = "0.1"/versionName = "v1.4"/' app/build.gradle.kts
+          sed -i 's/versionCode = 1/versionCode = 8/' app/build.gradle.kts
+          sed -i 's/versionName = "0.1"/versionName = "v1.5"/' app/build.gradle.kts
           grep -q 'versionCode = 7' app/build.gradle.kts
           grep -q 'versionName = "v1.5"' app/build.gradle.kts
       - name: Configure persistent debug signing
