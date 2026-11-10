@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.5
+    name: Build GamepadBridge v1.6
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -82,10 +82,10 @@ jobs:
           PY
       - name: Set app version
         run: |
-          sed -i 's/versionCode = 1/versionCode = 8/' app/build.gradle.kts
-          sed -i 's/versionName = "0.1"/versionName = "v1.5"/' app/build.gradle.kts
-          grep -q 'versionCode = 8' app/build.gradle.kts
-          grep -q 'versionName = "v1.5"' app/build.gradle.kts
+          sed -i 's/versionCode = 1/versionCode = 9/' app/build.gradle.kts
+          sed -i 's/versionName = "0.1"/versionName = "v1.6"/' app/build.gradle.kts
+          grep -q 'versionCode = 9' app/build.gradle.kts
+          grep -q 'versionName = "v1.6"' app/build.gradle.kts
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
@@ -102,10 +102,10 @@ jobs:
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
           sha256sum "$APK"
-      - name: Upload v1.5 APK
+      - name: Upload v1.6 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.5
+          name: GamepadBridge-v1.6
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
