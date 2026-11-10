@@ -74,7 +74,7 @@ jobs:
           s = s.replace(old_neg, "delta <= -threshold -> false", 1)
           p.write_text(s)
           PY
-          grep -q 'maxOf(1L' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
+          grep -q 'maxOf(45L' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
           grep -q 'delta >= threshold' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
           grep -q 'delta <= -threshold' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
       - name: Prevent controller Back button from closing mapping
