@@ -107,18 +107,19 @@ jobs:
               s = s.replace(handler_state, handler_state + nl + handler, 1)
           if "SystemClock.elapsedRealtime()" not in s: raise SystemExit("Double-back handler insertion failed")
 
-          # Remove the exact obsolete row from the verified Beta 2 source.
-          obsolete_row = (
-              "        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {" + nl +
-              "            TextButton(onClick = onBack) { Text(\"Trocar dispositivo\") }" + nl +
-              "        }" + nl
+          # Remove the switch-device row from the inspected Beta 2 source.
+          s, removed = re.subn(
+              r'(?m)^[ \\t]*Row\\(Modifier\\.fillMaxWidth\\(\\), horizontalArrangement = Arrangement\\.Start\\) \\{\\r?\\n'
+              r'[ \\t]*TextButton\\(onClick = onBack\\) \\{ Text\\("Trocar dispositivo"\\) \\}[^\\r\\n]*\\r?\\n'
+              r'[ \\t]*\\}\\r?\\n?',
+              "",
+              s,
+              count=1
           )
-          if obsolete_row in s:
-              s = s.replace(obsolete_row, "", 1)
-          elif "Trocar dispositivo" in s:
-              raise SystemExit("Obsolete switch row has an unexpected structure; inspect source before patching")
+          if removed != 1:
+              raise SystemExit("Could not remove switch-device row from MappingScreen")
           if "Trocar dispositivo" in s:
-              raise SystemExit("Control-switch label still exists after exact row removal")
+              raise SystemExit("Switch-device label remains in MappingScreen")
           mapping.write_text(s)
 
           activity = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
