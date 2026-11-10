@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.11 (remove switch-device button)
+    name: Build GamepadBridge v1.12 (capture-only controller mapping)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -169,9 +169,18 @@ jobs:
           if "private var mappingScreenActive" not in a:
               a = a.replace(class_anchor, class_anchor + nl + "    @Volatile private var mappingScreenActive = false", 1)
           create_anchor = "    override fun onCreate(savedInstanceState: Bundle?) {"
-          dispatch = ("    override fun dispatchKeyEvent(event: KeyEvent): Boolean {" + nl +
-              "        if (mappingScreenActive && (event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK))) return true" + nl +
-              "        return super.dispatchKeyEvent(event)" + nl + "    }" + nl + nl)
+          if ("import android.view.MotionEvent" not in a):
+              a = a.replace(bundle_import, bundle_import + nl + "import android.view.InputDevice" + nl + "import android.view.KeyEvent" + nl + "import android.view.MotionEvent", 1)
+          dispatch = ("    private fun isPhysicalGamepad(deviceId: Int): Boolean {" + nl +
+              "        val sources = InputDevice.getDevice(deviceId)?.sources ?: return false" + nl +
+              "        return (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD || (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK" + nl +
+              "    }" + nl + nl +
+              "    override fun dispatchKeyEvent(event: KeyEvent): Boolean {" + nl +
+              "        if (mappingScreenActive && event.keyCode != KeyEvent.KEYCODE_BACK && isPhysicalGamepad(event.deviceId)) return true" + nl +
+              "        return super.dispatchKeyEvent(event)" + nl + "    }" + nl + nl +
+              "    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {" + nl +
+              "        if (mappingScreenActive && isPhysicalGamepad(event.deviceId) && (event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK))) return true" + nl +
+              "        return super.dispatchGenericMotionEvent(event)" + nl + "    }" + nl + nl)
           if create_anchor not in a: raise SystemExit("MainActivity onCreate anchor not found")
           if "override fun dispatchKeyEvent(event: KeyEvent)" not in a:
               a = a.replace(create_anchor, dispatch + create_anchor, 1)
@@ -185,6 +194,8 @@ jobs:
           grep -q 'lastBackPress' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           ! grep -q 'Trocar dispositivo' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'override fun dispatchKeyEvent(event: KeyEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+          grep -q 'override fun dispatchGenericMotionEvent(event: MotionEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+          grep -q 'isPhysicalGamepad(event.deviceId)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'mappingScreenActive = true' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
       - name: Set app version
         run: |
@@ -193,14 +204,14 @@ jobs:
           import re
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 14', s, count=1)
-          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.11"', s, count=1)
+          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 15', s, count=1)
+          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.12"', s, count=1)
           if code_count != 1 or name_count != 1:
               raise SystemExit("Could not safely set app version")
           p.write_text(s)
           PY
-          grep -q 'versionCode = 14' app/build.gradle.kts
-          grep -q 'versionName = "v1.11"' app/build.gradle.kts
+          grep -q 'versionCode = 15' app/build.gradle.kts
+          grep -q 'versionName = "v1.12"' app/build.gradle.kts
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
@@ -220,7 +231,7 @@ jobs:
       - name: Upload v1.11 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.11
+          name: GamepadBridge-v1.12
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
