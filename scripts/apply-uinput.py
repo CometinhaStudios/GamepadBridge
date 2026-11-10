@@ -413,13 +413,10 @@ if "AnalogSettingsScreen" not in main:
     if signature_anchor not in main:
         raise SystemExit("HomeScreen callback signature anchor missing")
     main = main.replace(signature_anchor, "    onMap: () -> Unit,\n    onOpenSettings: () -> Unit,\n    onToggleService: (Boolean) -> Unit", 1)
-    home_start = main.index("private fun HomeScreen")
-    home_anchor = "        Spacer(Modifier.height(24.dp))"
-    home_pos = main.find(home_anchor, home_start)
-    if home_pos < 0:
-        raise SystemExit("HomeScreen settings button anchor missing")
-    home_pos += len(home_anchor)
-    main = main[:home_pos] + '\n        OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) { Text("Configurações") }' + main[home_pos:]
+    home_anchor = '        Text("Gamepad Bridge", style = MaterialTheme.typography.headlineMedium)'
+    if home_anchor not in main:
+        raise SystemExit("HomeScreen title anchor missing")
+    main = main.replace(home_anchor, home_anchor + '\n        OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) { Text("Configurações") }', 1)
     main_activity.write_text(main)
 
 service = java / "service/GamepadBridgeService.kt"
