@@ -107,7 +107,7 @@ jobs:
           s = s.replace(
               '        synchronized(axisRestValue) { axisRestValue.clear() }',
               '''        val initialRanges = DeviceNodeReader.getAxisRanges(node)
-                  .mapValues { it.value.current }
+                  .also { ranges -> synchronized(axisRestValue) { axisRestValue.clear(); ranges.forEach { (code, range) -> axisRestValue[code] = range.current } } }
               synchronized(axisRestValue) {
                   axisRestValue.clear()
                   axisRestValue.putAll(initialRanges)
@@ -115,8 +115,7 @@ jobs:
           )
           s = s.replace(
               '                            if (abs(raw.toLong() - rest.toLong()) > 45L) {',
-              '''                            val range = initialRanges[line.code]
-                            val span = DeviceNodeReader.getAxisRanges(node)[line.code]
+              '''                            val span = initialRanges[line.code]
                                 ?.let { (it.max - it.min).toLong() } ?: 0L
                             val threshold = maxOf(2L, span / 12L)
                             if (abs(raw.toLong() - rest.toLong()) > threshold) {'''
