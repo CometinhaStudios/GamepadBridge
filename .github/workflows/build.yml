@@ -182,8 +182,8 @@ jobs:
           activity.write_text(a)
           PY
           grep -q 'SystemClock.elapsedRealtime()' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-grep -q 'lastBackPress' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-! grep -q 'Trocar de controle' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          grep -q 'lastBackPress' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          ! grep -q 'Trocar de controle' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'override fun dispatchKeyEvent(event: KeyEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'mappingScreenActive = true' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
       - name: Set app version
