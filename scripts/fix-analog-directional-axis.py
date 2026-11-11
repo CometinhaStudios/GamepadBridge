@@ -2,8 +2,8 @@ from pathlib import Path
 
 p = Path("app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt")
 s = p.read_text()
-start = s.index("                // D-pad HAT values are digital; keep their key state independent")
-end_marker = """                val axes = mappedAxes.toIntArray()"""
+start = s.index("                for ((xbox, positiveDirection) in mappings) {")
+end_marker = "                val axes = mappedAxes.toIntArray()"
 end = s.index(end_marker, start)
 replacement = """                // Preserve the original per-mapping processing. Each calibrated
                 // direction contributes its own polarity; do not collapse the two
@@ -55,4 +55,4 @@ s = s[:start] + replacement + s[end:]
 if "Preserve the original per-mapping processing" not in s:
     raise SystemExit("Rollback marker missing")
 p.write_text(s)
-print("Restored per-direction axis processing while retaining HAT and centered normalization fixes.")
+print("Restored per-direction analog mapping.")
