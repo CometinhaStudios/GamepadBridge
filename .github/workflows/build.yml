@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.20 (restore raw analog calibration baseline)
+    name: Build GamepadBridge v1.21 (fix generic USB analog capture)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -61,6 +61,15 @@ jobs:
           test -s app/src/main/aidl/com/gamepadbridge/app/ipc/IGamepadUInput.aidl
           test -s app/src/main/cpp/CMakeLists.txt
 
+      - name: Fix analog capture across all physical controller event nodes
+        run: |
+          python3 scripts/fix-multi-node-input.py
+          grep -q 'range == null -> 45L' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
+          grep -q 'fun streamEvents(nodes: List<String>' app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt
+          grep -q 'DeviceNodeReader.encodeNodes(device.nodes)' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
+          grep -q 'DeviceNodeReader.decodeNodes(profile.deviceName)' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
+          grep -q 'UInputBridge.key(dpadKey, active)' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
+
       - name: Upload restored source for controller diagnosis
         uses: actions/upload-artifact@v4
         with:
@@ -109,14 +118,14 @@ jobs:
           import re
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 23', s, count=1)
-          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.20"', s, count=1)
+          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 24', s, count=1)
+          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.21"', s, count=1)
           if code_count != 1 or name_count != 1:
               raise SystemExit("Could not safely set app version")
           p.write_text(s)
           PY
-          grep -q 'versionCode = 23' app/build.gradle.kts
-          grep -q 'versionName = "v1.20"' app/build.gradle.kts
+          grep -q 'versionCode = 24' app/build.gradle.kts
+          grep -q 'versionName = "v1.21"' app/build.gradle.kts
 
       - name: Configure persistent debug signing
         run: |
@@ -135,15 +144,15 @@ jobs:
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
           test -n "$AAPT"
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
-          grep -q "package: name='com.gamepadbridge.app' versionCode='23' versionName='v1.20'" /tmp/apk-badging.txt
+          grep -q "package: name='com.gamepadbridge.app' versionCode='24' versionName='v1.21'" /tmp/apk-badging.txt
           sha256sum "$APK"
 
           unzip -l "$APK" | grep -q 'lib/arm64-v8a/libgamepad_uinput.so'
 
-      - name: Upload v1.20 APK
+      - name: Upload v1.21 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.20
+          name: GamepadBridge-v1.21
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
