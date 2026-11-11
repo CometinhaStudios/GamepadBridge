@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#121815"
+    android:padding="16dp">
+
+    <!-- Top Xbox Dashboard Header Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="12dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="GAMEPAD BRIDGE // XBOX 360 EDITION"
+            android:textColor="#107C41"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.05" />
+
+        <TextView
+            android:id="@+id/tvStatusShizuku"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Shizuku: Conectado"
+            android:textColor="#9BF00B"
+            android:textSize="12sp"
+            android:background="#1E2F23"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="4dp"/>
+    </LinearLayout>
+
+    <!-- Xbox Metro Style Blade Cards -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:spacing="16dp">
+
+            <!-- Prompt / Guidance Banner -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="#1B2621"
+                android:padding="14dp"
+                android:layout_marginBottom="12dp">
+
+                <TextView
+                    android:id="@+id/tvInstructionHeader"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Mapeamento e Teste em Tempo Real"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvCurrentMappingPrompt"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="22dp"
+                    android:text="Pressione o botão indicado no controle para mapear"
+                    android:textColor="#A0A0A0"
+                    android:textSize="13sp" />
+            </FrameLayout>
+
+            <!-- Custom Interactive Xbox 360 Gamepad View -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="280dp"
+                android:layout_gravity="center"
+                android:background="#151C18">
+
+                <com.gamepadbridge.ui.Xbox360ControllerView
+                    android:id="@+id/xboxControllerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center" />
+
+                <!-- Target Button Floating Badge Overlay -->
+                <LinearLayout
+                    android:id="@+id/badgeOverlay"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal|top"
+                    android:layout_marginTop="12dp"
+                    android:background="#D9107C41"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="6dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/tvBadgeText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Pressione A"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </FrameLayout>
+
+            <!-- Live Diagnostic Panel (Values & Triggers) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="16dp"
+                android:background="#1A221D"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Último Botão Detectado:"
+                    android:textColor="#80A080"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tvPressedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="NENHUM"
+                    android:textColor="#107C41"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:paddingBottom="8dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <!-- Left Trigger Gauge -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:paddingEnd="6dp">
+                        <TextView
+                            android:id="@+id/tvLTLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Gatilho LT: 0%"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp" />
+                        <ProgressBar
+                            android:id="@+id/progressLT"
+                            style="?android:attr/progressBarStyleHorizontal"
+                            android:layout_width="match_parent"
+                            android:layout_height="8dp"
+                            android:max="100"
+                            android:progress="0"
+                            android:progressTint="#107C41" />
+                    </LinearLayout>
+
+                    <!-- Right Trigger Gauge -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:paddingStart="6dp">
+                        <TextView
+                            android:id="@+id/tvRTLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Gatilho RT: 0%"
+                            android:textColor="#FFFFFF"
+                            android:textSize="12sp" />
+                        <ProgressBar
+                            android:id="@+id/progressRT"
+                            style="?android:attr/progressBarStyleHorizontal"
+                            android:layout_width="match_parent"
+                            android:layout_height="8dp"
+                            android:max="100"
+                            android:progress="0"
+                            android:progressTint="#107C41" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
