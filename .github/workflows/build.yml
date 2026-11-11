@@ -53,8 +53,8 @@ jobs:
           python3 scripts/apply-uinput.py
           grep -q 'UInputBridge.start(this)' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
           grep -q 'Microsoft X-Box 360 pad' app/src/main/cpp/gamepad_uinput.cpp
-          grep -q 'case 11: return ABS_RX' app/src/main/cpp/gamepad_uinput.cpp
-          grep -q 'case 14: return ABS_RY' app/src/main/cpp/gamepad_uinput.cpp
+          grep -q 'case 11: return ABS_Z' app/src/main/cpp/gamepad_uinput.cpp
+          grep -q 'case 14: return ABS_RZ' app/src/main/cpp/gamepad_uinput.cpp
           test -s app/src/main/aidl/com/gamepadbridge/app/ipc/IGamepadUInput.aidl
           test -s app/src/main/cpp/CMakeLists.txt
 
