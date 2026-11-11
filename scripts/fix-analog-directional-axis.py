@@ -69,4 +69,31 @@ s = s[:start] + replacement + s[end:]
 if "Preserve the original per-mapping processing" not in s:
     raise SystemExit("Rollback marker missing")
 p.write_text(s)
+# Use a stable geometric center for analog axes. The value reported by
+# getevent -lp is only a snapshot and may be biased by stick drift or by the
+# stick being held slightly off-center when the bridge starts. Treating that
+# snapshot as the center makes the same physical direction switch polarity
+# between service starts.
+reader = Path("app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt")
+rs = reader.read_text()
+old_center = """        fun centerValue(): Int {
+            if (max <= min) return 0
+            val midpoint = ((min.toLong() + max.toLong()) / 2L).toInt()
+            val current = currentValue ?: return midpoint
+            val quarter = (max.toLong() - min.toLong()) / 4L
+            return if (current.toLong() in (min.toLong() + quarter)..(max.toLong() - quarter)) current else midpoint
+        }"""
+new_center = """        fun centerValue(): Int {
+            if (max <= min) return 0
+            // A startup snapshot is not a reliable neutral point: stick drift,
+            // a hand resting on the stick, or startup timing can bias it.
+            // The geometric midpoint is stable across service restarts.
+            return ((min.toLong() + max.toLong()) / 2L).toInt()
+        }"""
+if old_center not in rs:
+    raise SystemExit("Expected AxisRange.centerValue implementation not found")
+rs = rs.replace(old_center, new_center, 1)
+reader.write_text(rs)
+print("Applied stable geometric center for analog axes.")
+
 print("Restored per-direction analog mapping.")
