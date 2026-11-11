@@ -15,6 +15,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Export original source archive for consolidation
+        uses: actions/upload-artifact@v4
+        with:
+          name: GamepadBridge-original-source
+          path: source/GamepadBridge-source.tar.xz
+          if-no-files-found: error
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
