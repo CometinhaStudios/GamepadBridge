@@ -22,7 +22,8 @@ jobs:
         run: |
           set -e
           mkdir -p /tmp/interface-src
-          unzip -q interface/app.zip -d /tmp/interface-src
+          base64 -d interface/app.zip > /tmp/interface.zip
+          unzip -q /tmp/interface.zip -d /tmp/interface-src
           echo "=== PACKAGE FILES ==="
           find /tmp/interface-src -maxdepth 5 -type f | sort
           echo "=== BUILD FILES ==="
