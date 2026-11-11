@@ -13,18 +13,22 @@ object AnalogAutoMapper {
     data class Detection(val mapping: Map<XboxInput, RawSource>, val message: String)
 
     fun detect(deviceName: String, node: String): Detection {
-        val candidates = InputDevice.getDeviceIds().mapNotNull { id ->
-            runCatching { InputDevice.getDevice(id) }.getOrNull()
-        }.filter { it.name.equals(deviceName, ignoreCase = true) }
+        val candidates = mutableListOf<InputDevice>()
+        for (id in InputDevice.getDeviceIds()) {
+            val candidate = InputDevice.getDevice(id) ?: continue
+            if (candidate.getName().equals(deviceName, ignoreCase = true)) {
+                candidates.add(candidate)
+            }
+        }
 
         val inputDevice = candidates.maxByOrNull { device ->
-            val axes = device.motionRanges.map { it.axis }.toSet()
+            val axes = device.getMotionRanges().map { range -> range.getAxis() }.toSet()
             (if ((device.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) 100 else 0) +
                 axes.count { it in setOf(MotionEvent.AXIS_X, MotionEvent.AXIS_Y, MotionEvent.AXIS_Z,
                     MotionEvent.AXIS_RZ, MotionEvent.AXIS_RX, MotionEvent.AXIS_RY) }
         } ?: return Detection(emptyMap(), "O Android não encontrou um dispositivo com o mesmo nome. O mapeamento manual continua disponível.")
 
-        val androidAxes = inputDevice.motionRanges.map { it.axis }.toSet()
+        val androidAxes = inputDevice.getMotionRanges().map { range -> range.getAxis() }.toSet()
         val rawRanges = DeviceNodeReader.getAxisRanges(node)
         val result = linkedMapOf<XboxInput, RawSource>()
 
@@ -51,7 +55,7 @@ object AnalogAutoMapper {
         val message = if (result.isEmpty()) {
             "O Android não expôs eixos compatíveis para este dispositivo. Faça o mapeamento manual."
         } else {
-            "$axesFound eixo(s) reconhecido(s) automaticamente em ${inputDevice.name}. Confira no teste antes de usar em jogos."
+            "$axesFound eixo(s) reconhecido(s) automaticamente em ${inputDevice.getName()}. Confira no teste antes de usar em jogos."
         }
         return Detection(result, message)
     }
