@@ -4,58 +4,55 @@ root = Path("app/src/main/java/com/gamepadbridge/app")
 (root / "input").mkdir(parents=True, exist_ok=True)
 (root / "input/AnalogAutoMapper.kt").write_text(r"""package com.gamepadbridge.app.input
 
-import android.view.InputDevice
-import android.view.MotionEvent
 import com.gamepadbridge.app.data.RawSource
 import com.gamepadbridge.app.data.XboxInput
 
 object AnalogAutoMapper {
     data class Detection(val mapping: Map<XboxInput, RawSource>, val message: String)
 
+    // Read capabilities from the exact evdev node already selected for button mapping.
+    // Android InputDevice names/sources are deliberately not consulted: Android can
+    // expose the buttons and raw evdev axes under different device identities.
     fun detect(deviceName: String, node: String): Detection {
-        val candidates = mutableListOf<InputDevice>()
-        for (id in InputDevice.getDeviceIds()) {
-            val candidate = InputDevice.getDevice(id) ?: continue
-            if (candidate.getName().equals(deviceName, ignoreCase = true)) {
-                candidates.add(candidate)
-            }
-        }
-
-        val inputDevice = candidates.maxByOrNull { device ->
-            val axes = device.getMotionRanges().map { range -> range.getAxis() }.toSet()
-            (if ((device.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) 100 else 0) +
-                axes.count { it in setOf(MotionEvent.AXIS_X, MotionEvent.AXIS_Y, MotionEvent.AXIS_Z,
-                    MotionEvent.AXIS_RZ, MotionEvent.AXIS_RX, MotionEvent.AXIS_RY) }
-        } ?: return Detection(emptyMap(), "O Android não encontrou um dispositivo com o mesmo nome. O mapeamento manual continua disponível.")
-
-        val androidAxes = inputDevice.getMotionRanges().map { range -> range.getAxis() }.toSet()
-        val rawRanges = DeviceNodeReader.getAxisRanges(node)
+        val ranges = DeviceNodeReader.getAxisRanges(node)
         val result = linkedMapOf<XboxInput, RawSource>()
 
-        fun pair(negative: XboxInput, positive: XboxInput, androidAxis: Int, rawCode: String) {
-            if (androidAxis !in androidAxes || rawCode !in rawRanges) return
-            result[negative] = RawSource.Axis(rawCode, false)
-            result[positive] = RawSource.Axis(rawCode, true)
+        fun hasCenteredRange(code: String, allowUnsigned: Boolean = false): Boolean {
+            val range = ranges[code] ?: return false
+            if (range.max <= range.min) return false
+            // Z/RZ are often one-way triggers (0..255), not right-stick axes.
+            // RX/RY are conventional right-stick axes even on devices using
+            // unsigned 0..255 ranges, so those are allowed explicitly.
+            return allowUnsigned || (range.min < 0 && range.max > 0)
         }
 
-        pair(XboxInput.LS_LEFT, XboxInput.LS_RIGHT, MotionEvent.AXIS_X, "ABS_X")
-        pair(XboxInput.LS_UP, XboxInput.LS_DOWN, MotionEvent.AXIS_Y, "ABS_Y")
+        fun pair(negative: XboxInput, positive: XboxInput, code: String, allowUnsigned: Boolean = false) {
+            if (!hasCenteredRange(code, allowUnsigned)) return
+            result[negative] = RawSource.Axis(code, false)
+            result[positive] = RawSource.Axis(code, true)
+        }
 
-        val zPair = MotionEvent.AXIS_Z in androidAxes && MotionEvent.AXIS_RZ in androidAxes &&
-            "ABS_Z" in rawRanges && "ABS_RZ" in rawRanges
-        if (zPair) {
-            pair(XboxInput.RS_LEFT, XboxInput.RS_RIGHT, MotionEvent.AXIS_Z, "ABS_Z")
-            pair(XboxInput.RS_UP, XboxInput.RS_DOWN, MotionEvent.AXIS_RZ, "ABS_RZ")
+        // The left stick is conventionally ABS_X / ABS_Y.
+        pair(XboxInput.LS_LEFT, XboxInput.LS_RIGHT, "ABS_X", allowUnsigned = true)
+        pair(XboxInput.LS_UP, XboxInput.LS_DOWN, "ABS_Y", allowUnsigned = true)
+
+        // Prefer RX/RY for the right stick. Fall back to Z/RZ only when they
+        // have a bipolar range, avoiding accidental mapping of analog triggers.
+        val hasRxRy = hasCenteredRange("ABS_RX", allowUnsigned = true) &&
+            hasCenteredRange("ABS_RY", allowUnsigned = true)
+        if (hasRxRy) {
+            pair(XboxInput.RS_LEFT, XboxInput.RS_RIGHT, "ABS_RX", allowUnsigned = true)
+            pair(XboxInput.RS_UP, XboxInput.RS_DOWN, "ABS_RY", allowUnsigned = true)
         } else {
-            pair(XboxInput.RS_LEFT, XboxInput.RS_RIGHT, MotionEvent.AXIS_RX, "ABS_RX")
-            pair(XboxInput.RS_UP, XboxInput.RS_DOWN, MotionEvent.AXIS_RY, "ABS_RY")
+            pair(XboxInput.RS_LEFT, XboxInput.RS_RIGHT, "ABS_Z")
+            pair(XboxInput.RS_UP, XboxInput.RS_DOWN, "ABS_RZ")
         }
 
         val axesFound = result.size / 2
         val message = if (result.isEmpty()) {
-            "O Android não expôs eixos compatíveis para este dispositivo. Faça o mapeamento manual."
+            "Nenhum eixo analógico compatível foi encontrado no dispositivo selecionado ($deviceName). Confira se ele aparece como ABS_X/ABS_Y, ABS_RX/ABS_RY ou ABS_Z/ABS_RZ."
         } else {
-            "$axesFound eixo(s) reconhecido(s) automaticamente em ${inputDevice.getName()}. Confira no teste antes de usar em jogos."
+            "$axesFound eixo(s) analógico(s) encontrado(s) diretamente no dispositivo selecionado ($deviceName), sem depender do nome reconhecido pelo Android."
         }
         return Detection(result, message)
     }
