@@ -167,7 +167,7 @@ static int keycode(int k) {
 static int axiscode(int a) {
     switch (a) {
         case 0: return ABS_X; case 1: return ABS_Y;
-        case 11: return ABS_RX; case 14: return ABS_RY;
+        case 11: return ABS_Z; case 14: return ABS_RZ;
         case 12: return ABS_RX; case 13: return ABS_RY;
         case 15: return ABS_HAT0X; case 16: return ABS_HAT0Y;
         case 17: return ABS_Z; case 18: return ABS_RZ;
