@@ -62,3 +62,5 @@ jobs:
           name: GamepadBridge-Interface-Preview
           path: preview-apk/*.apk
           if-no-files-found: error
+
+# Trigger build after workflow file is present on this branch.
