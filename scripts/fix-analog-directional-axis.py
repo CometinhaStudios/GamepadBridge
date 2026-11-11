@@ -25,10 +25,15 @@ replacement = """                // Preserve the original per-mapping processing
                     // For paired directions sharing an output axis, only the mapping whose
                     // calibrated raw direction matches the current movement may write.
                     // This prevents the inactive opposite direction from overwriting it.
-                    if (xbox == XboxInput.RS_UP || xbox == XboxInput.RS_DOWN ||
-                        xbox == XboxInput.LS_LEFT || xbox == XboxInput.LS_RIGHT) {
+                    val isStickDirection = xbox in setOf(
+                        XboxInput.LS_LEFT, XboxInput.LS_RIGHT, XboxInput.LS_UP, XboxInput.LS_DOWN,
+                        XboxInput.RS_LEFT, XboxInput.RS_RIGHT, XboxInput.RS_UP, XboxInput.RS_DOWN
+                    )
+                    if (isStickDirection) {
                         val center = range?.centerValue()?.toLong() ?: 0L
                         val rawIsPositive = raw.toLong() > center
+                        // Apply the same polarity check to every stick axis. This keeps
+                        // the inactive opposite direction from overwriting the active one.
                         if (raw.toLong() != center && positiveDirection != rawIsPositive) continue
                     }
                     val axis = ControllerProfile.outputAxis(xbox) ?: continue
