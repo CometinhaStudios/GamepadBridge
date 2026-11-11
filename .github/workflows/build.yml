@@ -37,6 +37,12 @@ jobs:
           python3 scripts/fix-analog-directional-axis.py
           grep -q 'Resolve each physical axis once' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
 
+      - name: Wait for Shizuku injector before starting bridge
+        run: |
+          python3 scripts/fix-injector-startup-race.py
+          grep -q 'suspend fun awaitInjector' app/src/main/java/com/gamepadbridge/app/inject/ShizukuBridge.kt
+          grep -q 'ShizukuBridge.awaitInjector(this)' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
+
       - name: Upload restored source for controller diagnosis
         uses: actions/upload-artifact@v4
         with:
