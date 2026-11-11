@@ -65,3 +65,4 @@ jobs:
           if-no-files-found: error
 
 # Trigger build after workflow file is present on this branch.
+# Archive decoding is required because app.zip is stored as base64 text.
