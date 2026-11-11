@@ -32,34 +32,50 @@ elif new_parse not in s:
 reader.write_text(s)
 
 capture = root / "input/CalibrationCapture.kt"
-s = capture.read_text()
-old_start = """        synchronized(axisRestValue) { axisRestValue.clear() }
-        thread(name = "calibration-capture") {"""
-new_start = """        val axisRanges = DeviceNodeReader.getAxisRanges(node)
+capture.write_text("""package com.gamepadbridge.app.input
+
+import com.gamepadbridge.app.data.RawSource
+import kotlinx.coroutines.flow.MutableSharedFlow
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
+import kotlin.math.abs
+
+object CalibrationCapture {
+    val events = MutableSharedFlow<RawSource>(extraBufferCapacity = 32)
+
+    private val generation = AtomicInteger(0)
+    private val axisRestValue = HashMap<String, Int>()
+
+    fun start(node: String) {
+        val token = generation.incrementAndGet()
+        val axisRanges = DeviceNodeReader.getAxisRanges(node)
         synchronized(axisRestValue) {
             axisRestValue.clear()
             axisRanges.forEach { (code, range) ->
                 range.currentValue?.let { axisRestValue[code] = it }
             }
         }
-        thread(name = "calibration-capture") {"""
-if old_start in s:
-    s = s.replace(old_start, new_start, 1)
-elif "val axisRanges = DeviceNodeReader.getAxisRanges(node)" not in s:
-    raise SystemExit("Calibration start anchor not found")
-
-old_capture = """                            val rest = synchronized(axisRestValue) {
-                                axisRestValue.getOrPut(line.code) { raw }
-                            }
-                            if (abs(raw.toLong() - rest.toLong()) > 45L) {"""
-new_capture = """                            val range = axisRanges[line.code]
+        thread(name = "calibration-capture") {
+            DeviceNodeReader.streamEvents(
+                node = node,
+                onLine = { line ->
+                    when (line.type) {
+                        "EV_KEY" -> when (line.value.trim()) {
+                            "DOWN" -> events.tryEmit(RawSource.Key(line.code))
+                        }
+                        "EV_ABS" -> {
+                            val raw = parseRawValue(line.value) ?: return@streamEvents
+                            val range = axisRanges[line.code]
                             val isHat = line.code.startsWith("ABS_HAT")
-                            val isTrigger = line.code in setOf("ABS_Z", "ABS_RZ", "ABS_BRAKE", "ABS_GAS", "ABS_THROTTLE")
+                            val isTrigger = line.code in setOf(
+                                "ABS_Z", "ABS_RZ", "ABS_BRAKE", "ABS_GAS", "ABS_THROTTLE"
+                            )
                             val rest = synchronized(axisRestValue) {
                                 axisRestValue.getOrPut(line.code) {
                                     range?.currentValue
                                         ?: range?.let {
-                                            if (isTrigger) it.min else ((it.min.toLong() + it.max.toLong()) / 2L).toInt()
+                                            if (isTrigger) it.min
+                                            else ((it.min.toLong() + it.max.toLong()) / 2L).toInt()
                                         }
                                         ?: raw
                                 }
@@ -67,12 +83,29 @@ new_capture = """                            val range = axisRanges[line.code]
                             val span = ((range?.max?.toLong() ?: 65535L) -
                                 (range?.min?.toLong() ?: -32768L)).coerceAtLeast(1L)
                             val threshold = if (isHat) 0L else maxOf(6L, span / 128L)
-                            if (abs(raw.toLong() - rest.toLong()) > threshold) {"""
-if old_capture in s:
-    s = s.replace(old_capture, new_capture, 1)
-elif "val isHat = line.code.startsWith(\"ABS_HAT\")" not in s:
-    raise SystemExit("Calibration axis capture block not found")
-capture.write_text(s)
+                            if (abs(raw.toLong() - rest.toLong()) > threshold) {
+                                events.tryEmit(RawSource.Axis(line.code, raw > rest))
+                            }
+                        }
+                    }
+                },
+                shouldStop = { generation.get() != token }
+            )
+        }
+    }
+
+    fun stop(node: String? = null) {
+        generation.incrementAndGet()
+        if (node != null) DeviceNodeReader.stop(node)
+    }
+
+    private fun parseRawValue(value: String): Int? = runCatching {
+        val cleaned = value.trim().removePrefix("0x")
+        if (cleaned.isEmpty()) return null
+        cleaned.toLong(16).toInt()
+    }.getOrNull()
+}
+""")
 
 service = root / "service/GamepadBridgeService.kt"
 s = service.read_text()
