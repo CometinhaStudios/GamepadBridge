@@ -292,6 +292,7 @@ else:
     raise SystemExit("Could not find current Shizuku startup guard")
 s = s.replace("ShizukuBridge.injectKey(keyCode, true, InputDevice.SOURCE_GAMEPAD)", "UInputBridge.key(keyCode, true)")
 s = s.replace("ShizukuBridge.injectKey(keyCode, false, InputDevice.SOURCE_GAMEPAD)", "UInputBridge.key(keyCode, false)")
+s = s.replace("ShizukuBridge.injectKey(it, false, InputDevice.SOURCE_GAMEPAD)", "UInputBridge.key(it, false)")
 s = s.replace("ShizukuBridge.injectAxisBatch(axes, values, InputDevice.SOURCE_JOYSTICK)", """for (i in axes.indices) UInputBridge.axis(axes[i], values[i])""")
 svc.write_text(s)
 
