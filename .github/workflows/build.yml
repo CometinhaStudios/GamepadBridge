@@ -32,10 +32,10 @@ jobs:
           grep -q 'if (isHat) 0L' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
           grep -q 'fun centerValue()' app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt
 
-      - name: Correct analog axis direction resolution
+      - name: Restore stable per-direction analog handling
         run: |
           python3 scripts/fix-analog-directional-axis.py
-          grep -q 'Resolve each physical axis once' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
+          grep -q 'Preserve the original per-mapping processing' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
 
       - name: Wait for Shizuku injector before starting bridge
         run: |
