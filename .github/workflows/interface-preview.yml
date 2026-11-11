@@ -7,6 +7,7 @@ on:
       - '.github/workflows/interface-preview.yml'
       - 'source/**'
       - 'patches/fix-v13/**'
+      - 'interface/**'
   workflow_dispatch:
 
 permissions:
@@ -98,6 +99,59 @@ jobs:
           grep -q 'startDestination = "test"' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           grep -q 'applicationId = "com.gamepadbridge.preview"' app/build.gradle.kts
           grep -q 'ControllerTestState.axes(lx, ly, rx, ry' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+
+      - name: Integrate Google Xbox 360 dashboard UI into isolated preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q interface/google-ui-source.zip -d /tmp/google-ui
+          mkdir -p app/src/main/java/com/gamepadbridge/ui app/src/main/res/layout
+          cp /tmp/google-ui/app/src/main/java/com/gamepadbridge/GamepadTestActivity.java app/src/main/java/com/gamepadbridge/GamepadTestActivity.java
+          cp /tmp/google-ui/app/src/main/java/com/gamepadbridge/ui/Xbox360ControllerView.java app/src/main/java/com/gamepadbridge/ui/Xbox360ControllerView.java
+          cp /tmp/google-ui/app/src/main/res/layout/activity_xbox_dashboard.xml app/src/main/res/layout/activity_xbox_dashboard.xml
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          activity = Path("app/src/main/java/com/gamepadbridge/GamepadTestActivity.java")
+          a = activity.read_text()
+          a = a.replace("import androidx.appcompat.app.AppCompatActivity;", "import android.app.Activity;\\nimport com.gamepadbridge.app.R;")
+          a = a.replace("extends AppCompatActivity", "extends Activity")
+          activity.write_text(a)
+
+          view = Path("app/src/main/java/com/gamepadbridge/ui/Xbox360ControllerView.java")
+          v = view.read_text().replace("import androidx.annotation.Nullable;", "")
+          v = v.replace("(@Nullable AttributeSet attrs)", "(AttributeSet attrs)")
+          view.write_text(v)
+
+          layout = Path("app/src/main/res/layout/activity_xbox_dashboard.xml")
+          x = layout.read_text()
+          x = x.replace('            android:spacing="16dp"\\n', "")
+          x = x.replace('android:text="Shizuku: Conectado"', 'android:text="PRÉVIA VISUAL"')
+          layout.write_text(x)
+
+          manifest = Path("app/src/main/AndroidManifest.xml")
+          m = manifest.read_text()
+          pattern = r'<activity\\b(?=[^>]*android:name="[^"]*MainActivity")[\\s\\S]*?</activity>'
+          def strip_launcher(match):
+              block = re.sub(r'<intent-filter>[\\s\\S]*?</intent-filter>', '', match.group(0), count=1)
+              return block
+          m, count = re.subn(pattern, strip_launcher, m, count=1)
+          if count != 1:
+              raise SystemExit("Could not find MainActivity declaration in AndroidManifest.xml")
+          new_activity = """<activity android:name="com.gamepadbridge.GamepadTestActivity" android:exported="true" android:screenOrientation="portrait">
+              <intent-filter>
+                  <action android:name="android.intent.action.MAIN" />
+                  <category android:name="android.intent.category.LAUNCHER" />
+              </intent-filter>
+          </activity>"""
+          m = m.replace("</application>", new_activity + "\\n    </application>")
+          manifest.write_text(m)
+          PY
+          test -s app/src/main/java/com/gamepadbridge/GamepadTestActivity.java
+          test -s app/src/main/java/com/gamepadbridge/ui/Xbox360ControllerView.java
+          grep -q 'com.gamepadbridge.GamepadTestActivity' app/src/main/AndroidManifest.xml
+          grep -q 'PRÉVIA VISUAL' app/src/main/res/layout/activity_xbox_dashboard.xml
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
