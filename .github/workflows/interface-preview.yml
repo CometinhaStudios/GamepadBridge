@@ -28,7 +28,9 @@ jobs:
           if raw.startswith(b"PK\\x03\\x04"):
               archive = raw
           else:
-              archive = base64.b64decode(raw, validate=False)
+              encoded = b"".join(raw.split())
+              encoded += b"=" * (-len(encoded) % 4)
+              archive = base64.b64decode(encoded, validate=False)
           pathlib.Path("/tmp/interface.zip").write_bytes(archive)
           print("Archive bytes:", len(archive), "signature:", archive[:4])
           PY
