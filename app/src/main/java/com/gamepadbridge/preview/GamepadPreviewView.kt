@@ -95,6 +95,8 @@ class GamepadPreviewView(context: Context) : View(context) {
         txt(c,"ANALÓGICO DIR.",220f,608f,9f,muted,true);txt(c,"X "+fmt(rx)+"   Y "+fmt(ry),220f,635f,11f,white,true)
         box(c,24f,681f,345f,70f,14f,panel);txt(c,"GATILHOS",42f,704f,9f,muted,true)
         txt(c,"LT  "+(lt*100).toInt()+"%",42f,731f,11f,white,true);txt(c,"RT  "+(rt*100).toInt()+"%",206f,731f,11f,white,true)
+        box(c,42f,739f,128f,4f,2f,Color.rgb(52,64,72));box(c,42f,739f,128f*lt,4f,2f,green)
+        box(c,206f,739f,128f,4f,2f,Color.rgb(52,64,72));box(c,206f,739f,128f*rt,4f,2f,green)
         box(c,24f,770f,345f,36f,12f,Color.rgb(32,45,55));txt(c,"VOLTAR",196f,793f,10f,white,true,center=true)
     }
     private fun fmt(v:Float)=String.format(java.util.Locale.US,"%+.2f",v)
@@ -118,8 +120,8 @@ class GamepadPreviewView(context: Context) : View(context) {
         p.color=Color.rgb(232,236,235);c.save();c.translate(0f,-3f);c.drawPath(b,p);c.restore()
         circle(c,196f,65f,24f,if(pressed.contains("GUIDE"))green else Color.rgb(205,214,211),Color.rgb(133,153,139),2f)
         txt(c,"X",196f,73f,27f,Color.rgb(104,143,58),true,center=true)
-        circle(c,91f,68f,28f,if(pressed.contains("L3"))green else Color.rgb(63,74,82),Color.rgb(35,43,49),3f)
-        circle(c,301f,143f,28f,if(pressed.contains("R3"))green else Color.rgb(63,74,82),Color.rgb(35,43,49),3f)
+        stick(c,91f,68f,lx,ly,"L3")
+        stick(c,301f,143f,rx,ry,"R3")
         circle(c,145f,143f,35f,Color.rgb(65,77,85),Color.rgb(35,43,49),2f)
         listOf(Triple("UP",145f,121f),Triple("DOWN",145f,165f),Triple("LEFT",123f,143f),Triple("RIGHT",167f,143f)).forEach{(n,x,y)->circle(c,x,y,12f,if(pressed.contains(n))green else Color.rgb(85,98,105),Color.rgb(40,49,55),1f)}
         face(c,330f,49f,"Y",Color.rgb(239,177,47));face(c,356f,78f,"B",Color.rgb(211,62,44))
@@ -127,11 +129,16 @@ class GamepadPreviewView(context: Context) : View(context) {
         shoulder(c,65f,24f,"LB");shoulder(c,281f,24f,"RB")
         c.restore()
     }
+    private fun stick(c:Canvas,x:Float,y:Float,ax:Float,ay:Float,n:String){
+        circle(c,x,y,28f,Color.rgb(63,74,82),Color.rgb(35,43,49),3f)
+        val px=x+(ax.coerceIn(-1f,1f)*13f);val py=y+(ay.coerceIn(-1f,1f)*13f)
+        circle(c,px,py,15f,if(pressed.contains(n))green else Color.rgb(84,98,107),Color.rgb(39,49,56),2f)
+    }
     private fun face(c:Canvas,x:Float,y:Float,n:String,color:Int){circle(c,x,y,11f,if(pressed.contains(n))green else color,Color.rgb(56,61,64),1.4f);txt(c,n,x,y+3.5f,8f,Color.WHITE,true,center=true)}
     private fun shoulder(c:Canvas,x:Float,y:Float,n:String){box(c,x,y,31f,13f,6f,if(pressed.contains(n))green else Color.rgb(72,83,90));txt(c,n,x+15.5f,y+9.5f,7f,white,true,center=true)}
     private fun circle(c:Canvas,x:Float,y:Float,r:Float,fill:Int,stroke:Int,sw:Float){p.style=Paint.Style.FILL;p.color=fill;c.drawCircle(x,y,r,p);p.style=Paint.Style.STROKE;p.strokeWidth=sw;p.color=stroke;c.drawCircle(x,y,r,p);p.style=Paint.Style.FILL}
     private fun box(c:Canvas,x:Float,y:Float,w:Float,h:Float,r:Float,color:Int){p.style=Paint.Style.FILL;p.color=color;c.drawRoundRect(RectF(x,y,x+w,y+h),r,r,p)}
-    private fun txt(c:Canvas,t:String,x:Float,y:Float,size:Float,color:Int,bold:Boolean=false,center:Boolean=false,spacing:Float=0f){p.style=Paint.Style.FILL;p.color=color;p.textSize=size;p.typeface=if(bold)android.graphics.Typeface.create("sans-serif",1)else android.graphics.Typeface.create("sans-serif",0);p.textAlign=if(center)Paint.Align.CENTER else Paint.Align.LEFT;p.letterSpacing=spacing/size;c.drawText(t,x,y,p);p.letterSpacing=0f}
+    private fun txt(c:Canvas,t:String,x:Float,y:Float,size:Float,color:Int,bold:Boolean=false,center:Boolean=false,spacing:Float=0f){p.style=Paint.Style.FILL;p.color=color;p.textSize=size;p.typeface=if(bold)android.graphics.Typeface.create("sans-serif",1)else android.graphics.Typeface.create("sans-serif",0);p.textAlign=if(center)Paint.Align.CENTER else Paint.Align.LEFT;c.drawText(t,x,y,p)}
     private fun ln(c:Canvas,x:Float,y:Float,x2:Float,y2:Float,color:Int,sw:Float){p.color=color;p.strokeWidth=sw;p.style=Paint.Style.STROKE;c.drawLine(x,y,x2,y2,p);p.style=Paint.Style.FILL}
     private fun dot(c:Canvas,x:Float,y:Float,r:Float,color:Int){p.color=color;p.style=Paint.Style.FILL;c.drawCircle(x,y,r,p)}
 }
