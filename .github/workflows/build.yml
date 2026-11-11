@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.16 (clean consolidated source)
+    name: Build GamepadBridge v1.17 (virtual Xbox 360 uinput)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -24,7 +24,7 @@ jobs:
           test -d /tmp/gamepadbridge-clean/GamepadBridge/app/src/main
           cp -a /tmp/gamepadbridge-clean/GamepadBridge/. .
           test -f app/src/main/AndroidManifest.xml
-          echo "Consolidated source restored; legacy patch scripts will not run."
+          echo "Consolidated source restored."
 
       - name: Fix HAT D-pad and analog axis handling
         run: |
@@ -42,6 +42,15 @@ jobs:
           python3 scripts/fix-injector-startup-race.py
           grep -q 'suspend fun awaitInjector' app/src/main/java/com/gamepadbridge/app/inject/ShizukuBridge.kt
           grep -q 'ShizukuBridge.awaitInjector(this)' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
+      - name: Restore native virtual Xbox 360 controller through Shizuku uinput
+        run: |
+          python3 scripts/apply-uinput.py
+          grep -q 'UInputBridge.start(this)' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
+          grep -q 'Microsoft X-Box 360 pad' app/src/main/cpp/gamepad_uinput.cpp
+          grep -q 'case 11: return ABS_RX' app/src/main/cpp/gamepad_uinput.cpp
+          grep -q 'case 14: return ABS_RY' app/src/main/cpp/gamepad_uinput.cpp
+          test -s app/src/main/aidl/com/gamepadbridge/app/ipc/IGamepadUInput.aidl
+          test -s app/src/main/cpp/CMakeLists.txt
 
       - name: Upload restored source for controller diagnosis
         uses: actions/upload-artifact@v4
@@ -49,6 +58,9 @@ jobs:
           name: GamepadBridge-source-diagnostic
           path: |
             app/src/main/java
+            app/src/main/aidl
+            app/src/main/cpp
+            app/src/main/AndroidManifest.xml
             app/src/test
             app/build.gradle.kts
           if-no-files-found: warn
@@ -64,6 +76,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+      - name: Install Android NDK and CMake for native uinput
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
 
       - name: Set app version
         run: |
@@ -72,14 +88,14 @@ jobs:
           import re
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 19', s, count=1)
-          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.16"', s, count=1)
+          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 20', s, count=1)
+          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.17"', s, count=1)
           if code_count != 1 or name_count != 1:
               raise SystemExit("Could not safely set app version")
           p.write_text(s)
           PY
-          grep -q 'versionCode = 19' app/build.gradle.kts
-          grep -q 'versionName = "v1.16"' app/build.gradle.kts
+          grep -q 'versionCode = 20' app/build.gradle.kts
+          grep -q 'versionName = "v1.17"' app/build.gradle.kts
 
       - name: Configure persistent debug signing
         run: |
@@ -98,13 +114,15 @@ jobs:
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
           test -n "$AAPT"
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
-          grep -q "package: name='com.gamepadbridge.app' versionCode='19' versionName='v1.16'" /tmp/apk-badging.txt
+          grep -q "package: name='com.gamepadbridge.app' versionCode='20' versionName='v1.17'" /tmp/apk-badging.txt
           sha256sum "$APK"
 
-      - name: Upload v1.16 APK
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libgamepad_uinput.so'
+
+      - name: Upload v1.17 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.16
+          name: GamepadBridge-v1.17
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
