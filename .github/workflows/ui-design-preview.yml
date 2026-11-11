@@ -1,0 +1,49 @@
+name: Build GamepadBridge Interface Preview APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [interface-preview]
+    paths:
+      - 'app/**'
+      - '*.gradle.kts'
+      - 'settings.gradle.kts'
+      - '.github/workflows/ui-design-preview.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: interface-preview
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build APK
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Validate APK and isolated package
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n1)"
+          test -n "$AAPT"
+          "$AAPT" dump badging "$APK" | grep -F "package: name='com.gamepadbridge.preview'"
+          cp "$APK" GamepadBridge-Interface-Preview.apk
+          sha256sum GamepadBridge-Interface-Preview.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GamepadBridge-Interface-Preview
+          path: GamepadBridge-Interface-Preview.apk
+          if-no-files-found: error
+          retention-days: 30
