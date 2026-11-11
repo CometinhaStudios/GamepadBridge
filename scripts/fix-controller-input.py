@@ -55,8 +55,16 @@ object CalibrationCapture {
         val ranges = DeviceNodeReader.getAxisRanges(node)
         synchronized(axisRestValue) {
             axisRestValue.clear()
+            // Match the previously working calibration behavior: use the
+            // actual value reported by this controller at capture startup.
+            // Different generic USB pads can have a neutral point that is
+            // not exactly the mathematical midpoint of their advertised range.
             ranges.forEach { (code, range) ->
-                axisRestValue[code] = if (code.startsWith("ABS_HAT")) 0 else range.centerValue()
+                if (code.startsWith("ABS_HAT")) {
+                    axisRestValue[code] = 0
+                } else {
+                    range.currentValue?.let { axisRestValue[code] = it }
+                }
             }
         }
         thread(name = "calibration-capture") {
@@ -72,9 +80,17 @@ object CalibrationCapture {
                             val isHat = line.code.startsWith("ABS_HAT")
                             val range = ranges[line.code]
                             val rest = synchronized(axisRestValue) {
-                                axisRestValue.getOrPut(line.code) { if (isHat) 0 else range?.centerValue() ?: raw }
+                                axisRestValue.getOrPut(line.code) {
+                                    if (isHat) 0
+                                    else range?.currentValue
+                                        ?: range?.centerValue()
+                                        ?: raw
+                                }
                             }
-                            val span = if (isHat) 1L else ((range?.max?.toLong() ?: 65535L) - (range?.min?.toLong() ?: -32768L)).coerceAtLeast(1L)
+                            val span = if (isHat) 1L else (
+                                (range?.max?.toLong() ?: 65535L) -
+                                (range?.min?.toLong() ?: -32768L)
+                            ).coerceAtLeast(1L)
                             val threshold = if (isHat) 0L else maxOf(4L, span / 100L)
                             if (abs(raw.toLong() - rest.toLong()) > threshold) {
                                 events.tryEmit(RawSource.Axis(line.code, raw > rest))
