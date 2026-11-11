@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build GamepadBridge v1.19 (evdev analog auto-mapping)
+    name: Build GamepadBridge v1.20 (restore raw analog calibration baseline)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -29,6 +29,7 @@ jobs:
       - name: Fix HAT D-pad and analog axis handling
         run: |
           python3 scripts/fix-controller-input.py
+          grep -q 'range.currentValue?.let { axisRestValue\[code\] = it }' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
           grep -q 'if (isHat) 0L' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
           grep -q 'fun centerValue()' app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt
 
@@ -108,8 +109,8 @@ jobs:
           import re
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 22', s, count=1)
-          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.19"', s, count=1)
+          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 23', s, count=1)
+          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.20"', s, count=1)
           if code_count != 1 or name_count != 1:
               raise SystemExit("Could not safely set app version")
           p.write_text(s)
@@ -134,15 +135,15 @@ jobs:
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
           test -n "$AAPT"
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
-          grep -q "package: name='com.gamepadbridge.app' versionCode='22' versionName='v1.19'" /tmp/apk-badging.txt
+          grep -q "package: name='com.gamepadbridge.app' versionCode='23' versionName='v1.20'" /tmp/apk-badging.txt
           sha256sum "$APK"
 
           unzip -l "$APK" | grep -q 'lib/arm64-v8a/libgamepad_uinput.so'
 
-      - name: Upload v1.19 APK
+      - name: Upload v1.20 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.19
+          name: GamepadBridge-v1.20
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
