@@ -22,7 +22,17 @@ jobs:
         run: |
           set -e
           mkdir -p /tmp/interface-src
-          base64 -d interface/app.zip > /tmp/interface.zip
+          python3 - <<'PY'
+          import base64, pathlib
+          raw = pathlib.Path("interface/app.zip").read_bytes()
+          if raw.startswith(b"PK\\x03\\x04"):
+              archive = raw
+          else:
+              archive = base64.b64decode(raw, validate=False)
+          pathlib.Path("/tmp/interface.zip").write_bytes(archive)
+          print("Archive bytes:", len(archive), "signature:", archive[:4])
+          PY
+          unzip -t /tmp/interface.zip
           unzip -q /tmp/interface.zip -d /tmp/interface-src
           echo "=== PACKAGE FILES ==="
           find /tmp/interface-src -maxdepth 5 -type f | sort
