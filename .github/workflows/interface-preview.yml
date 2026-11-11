@@ -1,11 +1,12 @@
-name: Inspect and build isolated interface preview
+name: Build isolated GamepadBridge interface preview
 
 on:
   push:
     branches: [interface-preview]
     paths:
-      - 'interface/**'
       - '.github/workflows/interface-preview.yml'
+      - 'source/**'
+      - 'patches/fix-v13/**'
   workflow_dispatch:
 
 permissions:
@@ -16,65 +17,130 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect supplied interface package
-        id: inspect
+
+      - name: Restore stable app source into isolated build workspace
+        run: |
+          set -euo pipefail
+          test -s source/GamepadBridge-clean-source.tar.xz
+          mkdir -p /tmp/gpb-preview
+          tar -xJf source/GamepadBridge-clean-source.tar.xz -C /tmp/gpb-preview
+          test -d /tmp/gpb-preview/GamepadBridge/app/src/main
+          cp -a /tmp/gpb-preview/GamepadBridge/. .
+          test -f app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+
+      - name: Turn this build into a standalone controller-test preview
         shell: bash
         run: |
-          set -e
-          mkdir -p /tmp/interface-src
+          set -euo pipefail
           python3 - <<'PY'
-          import base64, pathlib
-          raw = pathlib.Path("interface/app.zip").read_bytes()
-          if raw.startswith(b"PK\\x03\\x04"):
-              archive = raw
-          else:
-              encoded = b"".join(raw.split())
-              encoded += b"=" * (-len(encoded) % 4)
-              archive = base64.b64decode(encoded, validate=False)
-          pathlib.Path("/tmp/interface.zip").write_bytes(archive)
-          print("Archive bytes:", len(archive), "signature:", archive[:4])
+          from pathlib import Path
+          import re
+
+          main = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
+          s = main.read_text()
+          old = '''    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                  if (mappingScreenActive && event.keyCode != KeyEvent.KEYCODE_BACK && event.device != null && !event.device.isVirtual) return true
+                  return super.dispatchKeyEvent(event)
+              }
+              override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+                  return super.dispatchGenericMotionEvent(event)
+              }'''
+          new = '''    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                  if (ControllerTestState.enabled && event.keyCode != KeyEvent.KEYCODE_BACK &&
+                      event.device != null && !event.device.isVirtual) {
+                      if (event.action == KeyEvent.ACTION_DOWN || event.action == KeyEvent.ACTION_UP) {
+                          ControllerTestState.key(event.keyCode, event.action == KeyEvent.ACTION_DOWN)
+                          return true
+                      }
+                  }
+                  if (mappingScreenActive && event.keyCode != KeyEvent.KEYCODE_BACK && event.device != null && !event.device.isVirtual) return true
+                  return super.dispatchKeyEvent(event)
+              }
+
+              override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+                  if (ControllerTestState.enabled && event.action == MotionEvent.ACTION_MOVE &&
+                      event.isFromSource(InputDevice.SOURCE_JOYSTICK)) {
+                      val lx = event.getAxisValue(MotionEvent.AXIS_X)
+                      val ly = event.getAxisValue(MotionEvent.AXIS_Y)
+                      val rx = event.getAxisValue(MotionEvent.AXIS_RX)
+                      val ry = event.getAxisValue(MotionEvent.AXIS_RY)
+                      fun trigger(axis: Int, fallback: Int): Float {
+                          val primary = event.getAxisValue(axis)
+                          val value = if (primary != 0f) primary else event.getAxisValue(fallback)
+                          return if (value < 0f) ((value + 1f) / 2f).coerceIn(0f, 1f) else value.coerceIn(0f, 1f)
+                      }
+                      ControllerTestState.axes(lx, ly, rx, ry,
+                          trigger(MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_BRAKE),
+                          trigger(MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_GAS))
+                      return true
+                  }
+                  return super.dispatchGenericMotionEvent(event)
+              }'''
+          if old not in s:
+              raise SystemExit("Could not find expected input-dispatch methods in MainActivity")
+          s = s.replace(old, new, 1)
+          s = s.replace('NavHost(navController, startDestination = "home")', 'NavHost(navController, startDestination = "test")', 1)
+          main.write_text(s)
+
+          gradle = Path("app/build.gradle.kts")
+          g = gradle.read_text()
+          g, n = re.subn(r'applicationId\s*=\s*"[^"]+"', 'applicationId = "com.gamepadbridge.preview"', g, count=1)
+          g, v = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 1', g, count=1)
+          g, vn = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "Interface Preview"', g, count=1)
+          if (n, v, vn) != (1, 1, 1):
+              raise SystemExit("Could not isolate preview package/version")
+          gradle.write_text(g)
+
+          manifest = Path("app/src/main/AndroidManifest.xml")
+          m = manifest.read_text().replace('android:label="Gamepad Bridge"', 'android:label="GamepadBridge UI Preview"')
+          manifest.write_text(m)
           PY
-          unzip -t /tmp/interface.zip
-          unzip -q /tmp/interface.zip -d /tmp/interface-src
-          echo "=== PACKAGE FILES ==="
-          find /tmp/interface-src -maxdepth 5 -type f | sort
-          echo "=== BUILD FILES ==="
-          find /tmp/interface-src -type f \( -name 'gradlew' -o -name 'build.gradle' -o -name 'build.gradle.kts' -o -name 'settings.gradle' -o -name 'settings.gradle.kts' \) -print
-          echo "=== MANIFESTS ==="
-          find /tmp/interface-src -name AndroidManifest.xml -type f -exec sh -c 'echo "--- $1"; sed -n "1,200p" "$1"' _ {} \;
-          if find /tmp/interface-src -type f \( -name 'gradlew' -o -name 'build.gradle' -o -name 'build.gradle.kts' \) | grep -q .; then
-            echo "BUILDABLE_PROJECT=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "BUILDABLE_PROJECT=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Set up Java
-        if: steps.inspect.outputs.BUILDABLE_PROJECT == 'true'
+          grep -q 'startDestination = "test"' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+          grep -q 'applicationId = "com.gamepadbridge.preview"' app/build.gradle.kts
+          grep -q 'ControllerTestState.axes(lx, ly, rx, ry' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Android SDK
-        if: steps.inspect.outputs.BUILDABLE_PROJECT == 'true'
+
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Set up Android SDK and native build tools
         uses: android-actions/setup-android@v3
-      - name: Build isolated APK
-        if: steps.inspect.outputs.BUILDABLE_PROJECT == 'true'
-        shell: bash
+        with:
+          packages: platform-tools
+          accept-android-sdk-licenses: true
+
+      - name: Install NDK and CMake
         run: |
-          set -e
-          ROOT="$(find /tmp/interface-src -type f -name gradlew -printf '%h\n' | head -n1)"
-          if [ -z "$ROOT" ]; then ROOT="$(dirname "$(find /tmp/interface-src -type f \( -name build.gradle -o -name build.gradle.kts \) | head -n1)")"; fi
-          cd "$ROOT"
-          chmod +x ./gradlew 2>/dev/null || true
-          if [ -x ./gradlew ]; then ./gradlew assembleDebug --stacktrace; else gradle assembleDebug --stacktrace; fi
-          mkdir -p "$GITHUB_WORKSPACE/preview-apk"
-          find . -path '*/build/outputs/apk/debug/*.apk' -exec cp {} "$GITHUB_WORKSPACE/preview-apk/" \;
-      - name: Upload preview APK
-        if: steps.inspect.outputs.BUILDABLE_PROJECT == 'true'
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(find "$SDK_ROOT" /usr/local/lib/android/sdk /opt/android-sdk -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Build preview APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Verify preview APK
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          AAPT="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n1)"
+          "$AAPT" dump badging "$APK" | grep -E "package: name='com.gamepadbridge.preview'|application-label:'GamepadBridge UI Preview'"
+          sha256sum "$APK"
+
+      - name: Upload isolated preview APK
         uses: actions/upload-artifact@v4
         with:
           name: GamepadBridge-Interface-Preview
-          path: preview-apk/*.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-
-# Trigger build after workflow file is present on this branch.
-# Archive decoding is required because app.zip is stored as base64 text.
+          retention-days: 30
