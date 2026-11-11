@@ -6,220 +6,37 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
-    name: Build GamepadBridge v1.15 (consolidated source)
+    name: Build GamepadBridge v1.16 (clean consolidated source)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Export original source archive for consolidation
-        uses: actions/upload-artifact@v4
-        with:
-          name: GamepadBridge-original-source
-          path: source/GamepadBridge-source.tar.xz
-          if-no-files-found: error
+
+      - name: Restore consolidated application source
+        run: |
+          test -s source/GamepadBridge-clean-source.tar.xz
+          mkdir -p /tmp/gamepadbridge-clean
+          tar -xJf source/GamepadBridge-clean-source.tar.xz -C /tmp/gamepadbridge-clean
+          test -d /tmp/gamepadbridge-clean/GamepadBridge/app/src/main
+          cp -a /tmp/gamepadbridge-clean/GamepadBridge/. .
+          test -f app/src/main/AndroidManifest.xml
+          echo "Consolidated source restored; legacy patch scripts will not run."
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-      - name: Extract verified Beta 2 baseline
-        run: |
-          mkdir -p /tmp/gamepadbridge-source
-          tar -xJf source/GamepadBridge-source.tar.xz -C /tmp/gamepadbridge-source
-          cp -a /tmp/gamepadbridge-source/GamepadBridge/. .
-      - name: Export input capture sources for inspection
-        run: |
-          mkdir -p /tmp/input-source
-          find app/src/main -type f | grep -Ei 'DeviceNodeReader|CalibrationCapture|GamepadBridgeService|InputEvent' | while IFS= read -r f; do
-            mkdir -p "/tmp/input-source/$(dirname "$f")"
-            cp "$f" "/tmp/input-source/$f"
-          done
-      - name: Upload input capture sources
-        uses: actions/upload-artifact@v4
-        with:
-          name: GamepadBridge-input-sources
-          path: /tmp/input-source/
-          if-no-files-found: warn
-      - name: Apply corrected v1.0 implementation
-        run: |
-          base64 --decode patches/beta1/patch.tar.gz.b64 > /tmp/gamepadbridge-beta1.tar.gz
-          tar -xzf /tmp/gamepadbridge-beta1.tar.gz -C /tmp
-          cp -a /tmp/beta1_patch/. .
-      - name: Apply Beta 2 controller visual and calibration safety fixes
-        run: |
-          base64 --decode patches/beta2/patch.tar.gz.b64 > /tmp/gamepadbridge-beta2.tar.gz
-          tar -xzf /tmp/gamepadbridge-beta2.tar.gz -C /tmp
-          cp -a /tmp/beta2_patch/. .
-          bash scripts/apply-beta2.sh
-      - name: Apply angled controller visual and live test feedback
-        run: |
-          cp -a patches/fix-v13/. .
-      - name: Apply directional analog calibration and multi-direction axis bridge
-        run: |
-          python3 scripts/apply-v14.py
-          cp -a patches/fix-v14/. .
-      - name: Fix analog capture threshold using stable calibration logic
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
 
-          p = Path("app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt")
-          s = p.read_text()
-          old_threshold = "val threshold = if (isHat) 0L else maxOf(45L, ((range?.max?.toLong() ?: 32767L) - (range?.min?.toLong() ?: -32768L)) / 12L)"
-          new_threshold = "val threshold = if (isHat) 0L else maxOf(45L, ((range?.max?.toLong() ?: 32767L) - (range?.min?.toLong() ?: -32768L)) / 32L)"
-          if old_threshold not in s:
-              raise SystemExit("Stable threshold line not found; refusing to patch an unexpected source")
-          s = s.replace(old_threshold, new_threshold, 1)
-          old_pos = "delta > threshold -> true"
-          old_neg = "delta < -threshold -> false"
-          if old_pos not in s or old_neg not in s:
-              raise SystemExit("Stable axis direction checks not found; refusing to patch")
-          s = s.replace(old_pos, "delta >= threshold -> true", 1)
-          s = s.replace(old_neg, "delta <= -threshold -> false", 1)
-          p.write_text(s)
-          PY
-          grep -q 'maxOf(45L' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
-          grep -q 'delta >= threshold' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
-          grep -q 'delta <= -threshold' app/src/main/java/com/gamepadbridge/app/input/CalibrationCapture.kt
-      - name: Fix mapping navigation while preserving raw analog capture
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          nl = chr(10)
-          mapping = Path("app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt")
-          s = mapping.read_text()
-          import_anchor = "import androidx.compose.foundation.layout.*"
-          if import_anchor not in s: raise SystemExit("MappingScreen imports not found")
-          if "import androidx.activity.compose.BackHandler" not in s:
-              s = s.replace(import_anchor, "import androidx.activity.compose.BackHandler" + nl + import_anchor, 1)
-          selected_anchor = "    var selectedDevice by remember { mutableStateOf<DeviceNodeReader.DeviceEntry?>(null) }"
-          if selected_anchor not in s: raise SystemExit("selectedDevice state not found")
-          s = s.replace("    BackHandler(enabled = true) { }", "", 1)
-          if "import android.os.SystemClock" not in s:
-              s = s.replace(import_anchor, "import android.os.SystemClock" + nl + import_anchor, 1)
-          handler_state = "    var lastBackPress by remember { mutableLongStateOf(0L) }"
-          if handler_state not in s:
-              s = s.replace(selected_anchor, selected_anchor + nl + handler_state, 1)
-          handler = ("    BackHandler(enabled = true) {" + nl +
-              "        val now = SystemClock.elapsedRealtime()" + nl +
-              "        if (now - lastBackPress <= 1500L) {" + nl +
-              "            lastBackPress = 0L" + nl +
-              "            if (selectedDevice != null) selectedDevice = null else onDone()" + nl +
-              "        } else { lastBackPress = now }" + nl + "    }")
-          if "SystemClock.elapsedRealtime()" not in s:
-              s = s.replace(handler_state, handler_state + nl + handler, 1)
-          if "SystemClock.elapsedRealtime()" not in s: raise SystemExit("Double-back handler insertion failed")
-
-          # Remove the complete button containing the switch-controller label.
-          import re
-          label = re.search(r'Text\s*\(\s*"Trocar dispositivo"\s*\)', s)
-          if label:
-              candidates = list(re.finditer(r'\b(?:TextButton|Button|OutlinedButton|ElevatedButton)\s*\(', s[:label.start()]))
-              if not candidates: raise SystemExit("Could not locate the Trocar dispositivo button")
-              start = candidates[-1].start()
-              opening = s.find("(", candidates[-1].start())
-              depth = 0
-              in_string = False
-              escaped = False
-              close = -1
-              for i in range(opening, len(s)):
-                  ch = s[i]
-                  if in_string:
-                      if escaped: escaped = False
-                      elif ch == "\\": escaped = True
-                      elif ch == '"': in_string = False
-                      continue
-                  if ch == '"': in_string = True
-                  elif ch == "(": depth += 1
-                  elif ch == ")":
-                      depth -= 1
-                      if depth == 0:
-                          close = i
-                          break
-              if close < 0: raise SystemExit("Could not parse button parameters")
-              end = close + 1
-              while end < len(s) and s[end].isspace(): end += 1
-              if end < len(s) and s[end] == "{":
-                  depth = 0
-                  in_string = False
-                  escaped = False
-                  for i in range(end, len(s)):
-                      ch = s[i]
-                      if in_string:
-                          if escaped: escaped = False
-                          elif ch == "\\": escaped = True
-                          elif ch == '"': in_string = False
-                          continue
-                      if ch == '"': in_string = True
-                      elif ch == "{": depth += 1
-                      elif ch == "}":
-                          depth -= 1
-                          if depth == 0:
-                              end = i + 1
-                              break
-              s = s[:start] + s[end:]
-          if "Trocar dispositivo" in s: raise SystemExit("Control-switch button label still exists")
-          mapping.write_text(s)
-
-          activity = Path("app/src/main/java/com/gamepadbridge/app/MainActivity.kt")
-          a = activity.read_text()
-          bundle_import = "import android.os.Bundle"
-          if bundle_import not in a: raise SystemExit("MainActivity import anchor not found")
-          if "import android.view.InputDevice" not in a:
-              a = a.replace(bundle_import, bundle_import + nl + "import android.view.InputDevice" + nl + "import android.view.KeyEvent" + nl + "import android.view.MotionEvent", 1)
-          class_anchor = "class MainActivity : ComponentActivity() {"
-          if class_anchor not in a: raise SystemExit("MainActivity class not found")
-          if "private var mappingScreenActive" not in a:
-              a = a.replace(class_anchor, class_anchor + nl + "    @Volatile private var mappingScreenActive = false", 1)
-          create_anchor = "    override fun onCreate(savedInstanceState: Bundle?) {"
-          dispatch = ("    override fun dispatchKeyEvent(event: KeyEvent): Boolean {" + nl +
-              "        if (mappingScreenActive && event.keyCode != KeyEvent.KEYCODE_BACK && event.device != null && !event.device.isVirtual) return true" + nl +
-              "        return super.dispatchKeyEvent(event)" + nl + "    }" + nl + nl +
-              "    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {" + nl +
-              "        return super.dispatchGenericMotionEvent(event)" + nl + "    }" + nl + nl)
-          if create_anchor not in a: raise SystemExit("MainActivity onCreate anchor not found")
-          import re
-          key_method, motion_method = dispatch.split("    override fun dispatchGenericMotionEvent", 1)
-          motion_method = "    override fun dispatchGenericMotionEvent" + motion_method
-          key_pattern = r"    override fun dispatchKeyEvent\(event: KeyEvent\): Boolean \{.*?\n    \}"
-          motion_pattern = r"    override fun dispatchGenericMotionEvent\(event: MotionEvent\): Boolean \{.*?\n    \}"
-          if re.search(key_pattern, a, re.S):
-              a, n = re.subn(key_pattern, key_method.rstrip(), a, count=1, flags=re.S)
-              if n != 1: raise SystemExit("Could not replace existing dispatchKeyEvent")
-          else:
-              a = a.replace(create_anchor, dispatch + create_anchor, 1)
-          if "override fun dispatchGenericMotionEvent(event: MotionEvent)" in a and "override fun dispatchKeyEvent(event: KeyEvent)" in a:
-              if re.search(motion_pattern, a, re.S):
-                  a, n = re.subn(motion_pattern, motion_method.rstrip(), a, count=1, flags=re.S)
-                  if n != 1: raise SystemExit("Could not replace existing dispatchGenericMotionEvent")
-              elif "override fun dispatchGenericMotionEvent(event: MotionEvent)" not in key_method:
-                  a = a.replace(create_anchor, motion_method + create_anchor, 1)
-          route_anchor = '                    composable("mapping/{profileId}") { entry ->'
-          route_effect = route_anchor + nl + "                        DisposableEffect(Unit) { mappingScreenActive = true; onDispose { mappingScreenActive = false } }"
-          if route_anchor not in a: raise SystemExit("Mapping navigation route not found")
-          if "mappingScreenActive = true" not in a: a = a.replace(route_anchor, route_effect, 1)
-          activity.write_text(a)
-          PY
-          grep -q 'SystemClock.elapsedRealtime()' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-          grep -q 'lastBackPress' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-          ! grep -q 'Trocar dispositivo' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-          grep -q 'override fun dispatchKeyEvent(event: KeyEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
-          grep -q 'override fun dispatchGenericMotionEvent(event: MotionEvent)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
-          grep -q 'mappingScreenActive && event.keyCode != KeyEvent.KEYCODE_BACK' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
-          grep -q 'return super.dispatchGenericMotionEvent(event)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
-          ! grep -q 'onPreviewKeyEvent' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
-          grep -q 'mappingScreenActive = true' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
-      - name: Consolidate input handling into source files
-        run: python3 scripts/consolidate-source.py
       - name: Set app version
         run: |
           python3 - <<'PY'
@@ -227,21 +44,25 @@ jobs:
           import re
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 18', s, count=1)
-          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.15"', s, count=1)
+          s, code_count = re.subn(r'versionCode\\s*=\\s*\\d+', 'versionCode = 19', s, count=1)
+          s, name_count = re.subn(r'versionName\\s*=\\s*"[^"]+"', 'versionName = "v1.16"', s, count=1)
           if code_count != 1 or name_count != 1:
               raise SystemExit("Could not safely set app version")
           p.write_text(s)
           PY
-          grep -q 'versionCode = 18' app/build.gradle.kts
-          grep -q 'versionName = "v1.15"' app/build.gradle.kts
+          grep -q 'versionCode = 19' app/build.gradle.kts
+          grep -q 'versionName = "v1.16"' app/build.gradle.kts
+
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
           base64 --decode signing/gamepadbridge-debug.keystore.b64 > "$HOME/.android/debug.keystore"
           chmod 600 "$HOME/.android/debug.keystore"
-      - name: Build APK
-        run: gradle assembleDebug --stacktrace
+          test -s "$HOME/.android/debug.keystore"
+
+      - name: Run unit tests and build APK
+        run: gradle testDebugUnitTest assembleDebug --stacktrace
+
       - name: Verify generated APK
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
@@ -249,24 +70,13 @@ jobs:
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
           test -n "$AAPT"
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
-          grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
+          grep -q "package: name='com.gamepadbridge.app' versionCode='19' versionName='v1.16'" /tmp/apk-badging.txt
           sha256sum "$APK"
-      - name: Save clean source archive after successful verification
-        run: |
-          mkdir -p /tmp/consolidated/GamepadBridge
-          cp -a app build.gradle.kts gradle.properties settings.gradle.kts gradle /tmp/consolidated/GamepadBridge/
-          tar -cJf source/GamepadBridge-clean-source.tar.xz -C /tmp/consolidated GamepadBridge
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add source/GamepadBridge-clean-source.tar.xz
-          if ! git diff --cached --quiet; then
-            git commit -m "Save consolidated GamepadBridge v1.15 source"
-            git push
-          fi
-      - name: Upload v1.15 APK
+
+      - name: Upload v1.16 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GamepadBridge-v1.14
+          name: GamepadBridge-v1.16
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
