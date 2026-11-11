@@ -22,6 +22,15 @@ replacement = """                // Preserve the original per-mapping processing
                         if (changed) ShizukuBridge.injectKey(dpadKey, active, InputDevice.SOURCE_GAMEPAD)
                         continue
                     }
+                    // For the right stick's vertical pair, only the mapping whose
+                    // calibrated raw direction matches the current movement may write
+                    // the shared RZ axis. This prevents RS_UP from being overwritten
+                    // by an inactive RS_DOWN mapping (or vice versa).
+                    if (xbox == XboxInput.RS_UP || xbox == XboxInput.RS_DOWN) {
+                        val center = range?.centerValue()?.toLong() ?: 0L
+                        val rawIsPositive = raw.toLong() > center
+                        if (raw.toLong() != center && positiveDirection != rawIsPositive) continue
+                    }
                     val axis = ControllerProfile.outputAxis(xbox) ?: continue
                     val isTrigger = xbox == XboxInput.L2 || xbox == XboxInput.R2
                     val normalized = when {
