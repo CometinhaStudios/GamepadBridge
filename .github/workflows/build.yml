@@ -32,6 +32,11 @@ jobs:
           grep -q 'if (isHat) 0L' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
           grep -q 'fun centerValue()' app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt
 
+      - name: Correct analog axis direction resolution
+        run: |
+          python3 scripts/fix-analog-directional-axis.py
+          grep -q 'Resolve each physical axis once' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
+
       - name: Upload restored source for controller diagnosis
         uses: actions/upload-artifact@v4
         with:
