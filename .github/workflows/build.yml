@@ -26,6 +26,12 @@ jobs:
           test -f app/src/main/AndroidManifest.xml
           echo "Consolidated source restored; legacy patch scripts will not run."
 
+      - name: Fix HAT D-pad and analog axis handling
+        run: |
+          python3 scripts/fix-controller-input.py
+          grep -q 'if (isHat) 0L' app/src/main/java/com/gamepadbridge/app/service/GamepadBridgeService.kt
+          grep -q 'fun centerValue()' app/src/main/java/com/gamepadbridge/app/input/DeviceNodeReader.kt
+
       - name: Upload restored source for controller diagnosis
         uses: actions/upload-artifact@v4
         with:
