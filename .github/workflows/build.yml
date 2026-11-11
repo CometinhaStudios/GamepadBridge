@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
-    name: Build GamepadBridge v1.14 (based on verified v1.11)
+    name: Build GamepadBridge v1.15 (consolidated source)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -66,13 +66,6 @@ jobs:
         run: |
           python3 scripts/apply-v14.py
           cp -a patches/fix-v14/. .
-      - name: Add native virtual Xbox 360 controller through Shizuku UInput
-        run: |
-          python3 scripts/apply-uinput.py
-      - name: Set up Android SDK, NDK and CMake
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'ndk;27.2.12479018 cmake;3.22.1'
       - name: Fix analog capture threshold using stable calibration logic
         run: |
           python3 - <<'PY'
@@ -225,6 +218,8 @@ jobs:
           grep -q 'return super.dispatchGenericMotionEvent(event)' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
           ! grep -q 'onPreviewKeyEvent' app/src/main/java/com/gamepadbridge/app/ui/MappingScreen.kt
           grep -q 'mappingScreenActive = true' app/src/main/java/com/gamepadbridge/app/MainActivity.kt
+      - name: Consolidate input handling into source files
+        run: python3 scripts/consolidate-source.py
       - name: Set app version
         run: |
           python3 - <<'PY'
@@ -232,14 +227,14 @@ jobs:
           import re
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 17', s, count=1)
-          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.14"', s, count=1)
+          s, code_count = re.subn(r'versionCode\s*=\s*\d+', 'versionCode = 18', s, count=1)
+          s, name_count = re.subn(r'versionName\s*=\s*"[^"]+"', 'versionName = "v1.15"', s, count=1)
           if code_count != 1 or name_count != 1:
               raise SystemExit("Could not safely set app version")
           p.write_text(s)
           PY
-          grep -q 'versionCode = 17' app/build.gradle.kts
-          grep -q 'versionName = "v1.14"' app/build.gradle.kts
+          grep -q 'versionCode = 18' app/build.gradle.kts
+          grep -q 'versionName = "v1.15"' app/build.gradle.kts
       - name: Configure persistent debug signing
         run: |
           mkdir -p "$HOME/.android"
@@ -256,7 +251,19 @@ jobs:
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -q "package: name='com.gamepadbridge.app'" /tmp/apk-badging.txt
           sha256sum "$APK"
-      - name: Upload v1.14 APK
+      - name: Save clean source archive after successful verification
+        run: |
+          mkdir -p /tmp/consolidated/GamepadBridge
+          cp -a app build.gradle.kts gradle.properties settings.gradle.kts gradle /tmp/consolidated/GamepadBridge/
+          tar -cJf source/GamepadBridge-clean-source.tar.xz -C /tmp/consolidated GamepadBridge
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source/GamepadBridge-clean-source.tar.xz
+          if ! git diff --cached --quiet; then
+            git commit -m "Save consolidated GamepadBridge v1.15 source"
+            git push
+          fi
+      - name: Upload v1.15 APK
         uses: actions/upload-artifact@v4
         with:
           name: GamepadBridge-v1.14
