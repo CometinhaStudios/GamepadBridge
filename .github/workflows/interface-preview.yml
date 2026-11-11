@@ -1,0 +1,64 @@
+name: Inspect and build isolated interface preview
+
+on:
+  push:
+    branches: [interface-preview]
+    paths:
+      - 'interface/**'
+      - '.github/workflows/interface-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect supplied interface package
+        id: inspect
+        shell: bash
+        run: |
+          set -e
+          mkdir -p /tmp/interface-src
+          unzip -q interface/app.zip -d /tmp/interface-src
+          echo "=== PACKAGE FILES ==="
+          find /tmp/interface-src -maxdepth 5 -type f | sort
+          echo "=== BUILD FILES ==="
+          find /tmp/interface-src -type f \( -name 'gradlew' -o -name 'build.gradle' -o -name 'build.gradle.kts' -o -name 'settings.gradle' -o -name 'settings.gradle.kts' \) -print
+          echo "=== MANIFESTS ==="
+          find /tmp/interface-src -name AndroidManifest.xml -type f -exec sh -c 'echo "--- $1"; sed -n "1,200p" "$1"' _ {} \;
+          if find /tmp/interface-src -type f \( -name 'gradlew' -o -name 'build.gradle' -o -name 'build.gradle.kts' \) | grep -q .; then
+            echo "BUILDABLE_PROJECT=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "BUILDABLE_PROJECT=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Set up Java
+        if: steps.inspect.outputs.BUILDABLE_PROJECT == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        if: steps.inspect.outputs.BUILDABLE_PROJECT == 'true'
+        uses: android-actions/setup-android@v3
+      - name: Build isolated APK
+        if: steps.inspect.outputs.BUILDABLE_PROJECT == 'true'
+        shell: bash
+        run: |
+          set -e
+          ROOT="$(find /tmp/interface-src -type f -name gradlew -printf '%h\n' | head -n1)"
+          if [ -z "$ROOT" ]; then ROOT="$(dirname "$(find /tmp/interface-src -type f \( -name build.gradle -o -name build.gradle.kts \) | head -n1)")"; fi
+          cd "$ROOT"
+          chmod +x ./gradlew 2>/dev/null || true
+          if [ -x ./gradlew ]; then ./gradlew assembleDebug --stacktrace; else gradle assembleDebug --stacktrace; fi
+          mkdir -p "$GITHUB_WORKSPACE/preview-apk"
+          find . -path '*/build/outputs/apk/debug/*.apk' -exec cp {} "$GITHUB_WORKSPACE/preview-apk/" \;
+      - name: Upload preview APK
+        if: steps.inspect.outputs.BUILDABLE_PROJECT == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: GamepadBridge-Interface-Preview
+          path: preview-apk/*.apk
+          if-no-files-found: error
