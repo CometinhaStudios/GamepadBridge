@@ -1,4 +1,5 @@
 package com.gamepadbridge.preview
+// Preview build: AndroidX enabled in root gradle.properties.
 import android.app.Activity
 import android.os.Bundle
 import android.view.*
